@@ -1,0 +1,89 @@
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
+import com.asr.sab.cal.ASR_Calibration;
+import com.asr.sab.debug.CSVReader;
+import com.asr.sab.debug.CsvWriter;
+import com.asr.sab.proc.ASR_Process;
+
+public class ProcessSomeData {
+
+	public static void main(String[] args) throws IOException {
+		
+		int srate = 100;
+		
+		File cfolder = new File("E:/Documents/Phd/ASR_Riemann_Evaluation_withPGA/fef_calibDataJava/");
+		File[] fn_calibData = cfolder.listFiles();
+		
+		
+		File pfolder = new File("E:/Documents/Phd/ASR_Riemann_Evaluation_withPGA/fef_procDataJava/");
+		File[] fn_procData = pfolder.listFiles();
+		
+		
+		for (int i = 0; i < fn_calibData.length; i++) {
+			File cfile = fn_calibData[i];
+			File pfile = fn_procData[i];
+			double[][] calibData = CSVReader.readDoublesFromFile2d(cfile.getAbsolutePath());
+			double[][] procData = CSVReader.readDoublesFromFile2d(pfile.getAbsolutePath());
+			double[][] out = new double[procData.length][procData[0].length];
+		      
+			ASR_Calibration state = new ASR_Calibration(calibData);
+			System.out.println("finished calibration for " + cfile.getName());
+			ASR_Process proc = new ASR_Process(state, srate);
+		    	
+			/*
+			 * get 1000 sample chunk out of procData for current cleaning call
+			 */
+			int last_i = 1;
+			for (int k = 1000; k < procData[0].length; k+=1000) {
+				double[][] currentChunk = getChunk(procData, last_i, k);
+				double[][] tmp = proc.asr_process(currentChunk);
+				out = setChunk(tmp, out, last_i, k);
+				last_i = k;
+			}
+			
+			System.out.println("finished processing for " + pfile.getName());
+			Path p = Paths.get("E:/Documents/Phd/ASR_Riemann_Evaluation_withPGA/fef_javaOut/");
+			
+			CsvWriter.writeMatrixToPath(out, p, pfile.getName());
+			System.out.println("Wrote dataset " + pfile.getName());
+		}
+		
+	}
+	
+	
+	
+	
+	public static double[][] getChunk (double[][] data, int from, int to){
+		/*
+		 * returned chunk has same number of channels but only a range of samples 
+		 */
+		double[][] out = new double[data.length][to-from];
+		
+		int i = 0;
+		for (int c = 0; c < data.length; c++) {
+			for (int s = from; s < to; s++) {
+				out[c][i] = data[c][s];
+				i++;
+			}
+			i = 0;
+		}
+		return out;
+	}
+	
+	
+	public static double[][] setChunk (double[][] data, double[][] fillUp, int from, int to){
+		int i = 0;
+		for (int c = 0; c < data.length; c++) {
+			for (int s = from; s < to; s++) {
+				fillUp[c][s] = data[c][i];
+				i++;
+			}
+			i = 0;
+		}
+		return fillUp;
+	}
+
+}

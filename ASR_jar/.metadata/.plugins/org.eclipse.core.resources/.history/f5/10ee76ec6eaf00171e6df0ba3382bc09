@@ -1,0 +1,136 @@
+package com.asr.sab.debug;
+
+import static com.asr.sab.utils.MyMatrixUtils.*;
+
+import java.awt.geom.FlatteningPathIterator;
+import java.util.Arrays;
+
+import org.apache.commons.math3.linear.Array2DRowFieldMatrix;
+import org.apache.commons.math3.linear.Array2DRowRealMatrix;
+import org.apache.commons.math3.linear.RealMatrix;
+
+import com.asr.sab.cal.ASR_Calibration;
+import com.asr.sab.proc.ASR_Process;
+
+import la.matrix.DenseMatrix;
+import la.matrix.Matrix;
+import ml.utils.Matlab;
+
+
+public class ProcTest {
+
+	public static void main(String[] args) {
+		
+		int sRate = 100;
+		
+        /* 
+         * compose input X
+         */
+    	double[][] X = new double[2][20];
+
+        for (int i = 0; i < 20; i++) {
+            double addend = 0.01 * i;
+            X[0][i] = 1.01 + addend;
+            X[1][i] = 4.01 + addend;
+        }
+        
+        /*
+         * ------------------------- CALIBRATION -----------------------------------------
+         */
+        int blocksize = 5;
+		double[][] M = calculate_mixingMatrix(X, blocksize);
+		double window_overlap = 0.66;
+		double N = 5;
+		double[][] T = calculate_thresholdMatrix(X, M, window_overlap, N);
+        
+		ASR_Calibration state = new ASR_Calibration(2);
+		state.M = M;
+		state.T = T;
+		// -------------------------------------------------------------------------------
+		
+		// ----------------------------PROCESSING ----------------------------------------
+		ASR_Process proc = new ASR_Process(state, sRate);
+		proc.carry = proc.init_carry(X);
+		System.out.println("carry: " + Arrays.deepToString(proc.carry));
+
+		Matrix datMat = new DenseMatrix(X).transpose();
+		Matrix carryMat = new DenseMatrix(proc.carry).transpose();
+		
+		// put carry data in front of data 
+		Matrix cat = Matlab.cat(1, carryMat, datMat);
+		System.out.println("[carry, data] = " + Arrays.deepToString(cat.getData()));
+		
+		// this is now combined: data plus carry in front
+		double[][] paddedData = cat.getData();
+		
+		/*
+		 * filter data 
+		 * TODO this is without state. I assume, we have to correct this later (but how? >.<)
+		 */
+		double[][] filtered = new double[paddedData.length][paddedData[0].length];
+        double[] channelVal;
+        for (int c = 0 ; c < paddedData.length; c++){
+            channelVal = filter(state.B, state.A, paddedData[c]);
+            filtered[c] = channelVal; // rows = channels
+        } // tested, is like matlab so far!!!
+        
+        int C = X.length;
+        int samples = X[0].length;
+        double[] f = flatten(X);
+        double[] g = flatten(X);
+        
+        double[][] Xcov = multiply_and_reshape(f, g, C, samples);
+
+
+        
+        //double[][] Xcov = moving_average(N, filtered, state);
+	}
+
+	private static double[][] multiply_and_reshape(double[] f, double[] g, int chans, int samples) {
+		double[][] out = new double[samples][chans*chans];
+		/*
+		 * take every element from f and multiply it with every element of g. then
+		 * do the same for the next channel
+		 * whenever we have treated all samples from one channel, we begin anew
+		 */
+		int i = 0;
+		int j = 0;
+		for (int c = 0; c < chans; c++) {
+			for (int s = 0; s < chans*chans; s++) {
+				out[c][s] = f[i] * g[j];
+				j++;
+				if (j == chans) {
+					j = s;
+					i++;
+				}
+			}
+			i =0;
+		}
+		
+		
+		return out;
+	}
+
+	/*
+	 * take all samples from X and put them into a row vector, but in the
+	 * correct order, that is:
+	 * take all channelvalues at timepoint t0 and put them after each other.
+	 * the resulting vector will first have all values from channel1, then
+	 * all values from channel2 and so on. 
+	 * 
+	 * @param x is assumed to have channels in the major dimension and samples in the minor
+	 */
+	private static double[] flatten(double[][] x) {
+		// new row should have samples times channels in length
+		double[] out = new double[x[0].length * x.length ];
+		int i = 0;
+		for (int s = 0; s < x[0].length; s++) {
+			for (int c = 0; c < x.length; c++) {
+				out[i] = x[c][s];
+				i++;
+			}
+		}
+		return out;
+	}
+
+}

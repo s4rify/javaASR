@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring comment="Extract local variable &apos;test_v&apos; from expression &apos;XcovEigen.getV().getData()&apos;&#x0D;&#x0A;- Original project: &apos;ASR_Tests&apos;&#x0D;&#x0A;- Variable name: &apos;test_v&apos;&#x0D;&#x0A;- Destination method: &apos;com.asr.sab.proc.UT_ASR_Proc_Utils.eigenDecompTest_eigenvectorsV()&apos;&#x0D;&#x0A;- Variable expression: &apos;XcovEigen.getV().getData()&apos;&#x0D;&#x0A;- Replace occurrences of expression with variable" description="Extract local variable &apos;test_v&apos;" final="false" id="org.eclipse.jdt.ui.extract.temp" input="/src&lt;com.asr.sab.proc{UT_ASR_Proc_Utils.java" name="test_v" replace="true" selection="8626 26" stamp="1528819857768" version="1.0"/>
+</session>

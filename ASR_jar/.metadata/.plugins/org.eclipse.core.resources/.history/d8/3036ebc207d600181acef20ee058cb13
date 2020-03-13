@@ -1,0 +1,197 @@
+package com.asr.sab.proc;
+
+import static org.junit.Assert.assertArrayEquals;
+
+import java.io.IOException;
+import java.nio.file.FileSystems;
+import java.nio.file.Path;
+import java.util.Arrays;
+
+import org.apache.commons.math3.linear.Array2DRowRealMatrix;
+import org.apache.commons.math3.linear.EigenDecomposition;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+
+import com.asr.sab.cal.ASR_Calibration;
+import com.asr.sab.debug.CSVReader;
+import com.asr.sab.debug.CsvWriter;
+import com.asr.sab.utils.Calib_Utils;
+import com.asr.sab.utils.MyMatrixUtils;
+import com.asr.sab.utils.Proc_Utils;
+
+import utils.TestUtils;
+
+public class UT_ASR_Calibration {
+
+	/*
+	 * What we test here is never to be changed again. These matrices 
+	 * are not changed, they stay as is.
+	 */
+	private static final String FIRST_TEST_DATA_FOLDER = "resource/firstTestset/";
+	private static final int TEST_BLOCKSIZE = 10;
+	
+
+	@Before
+	public void setUp() throws Exception {
+		
+	}
+
+	@After
+	public void tearDown() throws Exception {
+	}
+
+	public static int sRate = 250;
+	@Test
+	public void test_MixingMatrixCalculation() throws IOException {
+		// arrange
+		// this is generated in Matlab
+		double[][] calibData = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "calib_data.csv");
+		
+		// act: call the filter and the mixing matrix calculation
+		double[][] filteredCalib = Proc_Utils.filter_data(calibData, sRate);
+		
+		double[][] actualMixingMatrix = Calib_Utils.calculate_mixingMatrix(filteredCalib, TEST_BLOCKSIZE);
+		
+		// assert
+		double[][] expectedMixingMatrix = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "M.csv");
+		TestUtils.assertDeepEquals(expectedMixingMatrix, actualMixingMatrix, 0.1);
+	}
+	
+	
+	@Test
+	public void test_componentActivationCalculation() throws IOException {
+		// arrange
+		// this is generated in Matlab
+		double[][] M = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "M.csv");
+		double[][] filtered = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "filtered.csv");  
+		
+		// act: call the filter and the mixing matrix calculation
+		EigenDecomposition eig_M = new EigenDecomposition(new Array2DRowRealMatrix(M));
+		double[][] actualCompActivations = Calib_Utils.compute_component_activations(filtered, eig_M);
+		
+		// assert
+		double[][] expectedCompActivations = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "compActivations.csv");
+		TestUtils.assertDeepEquals(expectedCompActivations, actualCompActivations, 0.1);
+	}
+	
+	
+	@Test
+	public void test_RMSCalculation() throws IOException {
+		// arrange
+		// this is generated in Matlab
+		double[][] compAct = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "compActivations.csv");
+		
+		// act
+		double [][] actualRMS = MyMatrixUtils.calculate_RMS(compAct, ASR_Calibration.window_overlap, ASR_Calibration.N);
+		
+		// assert
+		double[][] expectedRMS = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "RMS.csv");
+		TestUtils.assertDeepEquals(expectedRMS, actualRMS, 0.5); 
+	}
+	
+	
+	@Test
+	public void test_mu_calculation() throws IOException {
+		// arrange
+		double[][] RMS = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "RMS.csv");
+		
+		// act
+		double[][] channelStats = Calib_Utils.calculateStatistics(RMS); 
+		double[] actualMu = new double[channelStats.length];
+		
+		for (int c = 0; c < channelStats.length; c++) {
+			for (int j = 0; j < channelStats[0].length; j++) {
+				actualMu[c] = channelStats[c][0];
+			}
+		}
+		
+		//assert
+		double[] expectedMu = CSVReader.readDoublesFromFile(FIRST_TEST_DATA_FOLDER + "MU.csv");
+		assertArrayEquals(expectedMu, actualMu, 1); 
+	}
+	
+	@Test
+	public void test_sig_calculation() throws IOException {
+		// arrange
+		double[][] RMS = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "RMS.csv");
+		
+		// act
+		double[][] channelStats = Calib_Utils.calculateStatistics(RMS); 
+		double[] actualSig = new double[channelStats.length];
+		
+		for (int c = 0; c < channelStats.length; c++) {
+			for (int j = 0; j < channelStats[1].length; j++) {
+				actualSig[c] = channelStats[c][1];
+			}
+		}
+		
+		//assert
+		double[] expectedSig = CSVReader.readDoublesFromFile(FIRST_TEST_DATA_FOLDER + "SIG.csv");
+		assertArrayEquals(expectedSig, actualSig, 0.1); 
+	}
+	
+	/**
+	 * Test the calculation of the threshold matrix.
+	 * Since eigenvectors and eigenvalues are sign-invariant, we check the abs of the matrix.
+	 * @throws IOException
+	 */
+	@Test
+	public void test_thresholdMatrix_calculation() throws IOException {
+		// arrange
+		double[][] channelStats = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "channelStats.csv");
+		double[][] M = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "M.csv");
+		
+		EigenDecomposition eig_M = new EigenDecomposition(new Array2DRowRealMatrix(M));
+		// act
+		double[][] actualT = Calib_Utils.calculate_thresholdMatrix(channelStats, eig_M);
+		Path exportPath = FileSystems.getDefault().getPath("E:\\Documents\\Phd\\Snippets\\ASR_serviceTestingData"); 
+		CsvWriter.writeMatrixToPath(actualT, exportPath, "actualT");
+		
+		// assert
+		double[][] expectedT = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "T.csv");
+		TestUtils.assertDeepEquals(expectedT, actualT, 1);
+	}
+	
+	@Test
+	public void general_calibration_test_M() throws IOException {
+		// load rawdata, M 
+		double[][] calibData = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "calib_data.csv");
+		
+		
+		// compute M and T from raw data
+		ASR_Calibration asr = new ASR_Calibration(calibData);
+		double[][] actualM = asr.M;
+		Path exportPath = FileSystems.getDefault().getPath("E:\\Documents\\Phd\\Snippets\\ASR_serviceTestingData"); 
+		CsvWriter.writeMatrixToPath(actualM, exportPath, "actualM");
+		
+		// compare M and T
+		double[][] expectedM = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "M.csv");
+		TestUtils.assertDeepEquals(expectedM, actualM, 10);
+	}
+	
+	
+	/**
+	 * @throws IOException
+	 */
+	@Test
+	public void general_calibration_test_T() throws IOException {
+		// load rawdata, M 
+		double[][] calibData = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "calib_data.csv");
+		
+		// compute M and T from raw data
+		ASR_Calibration asr = new ASR_Calibration(calibData);
+		double[][] actualT = asr.T;
+		
+		// compare M and T
+		double[][] expectedT = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "T.csv");
+		
+		/**
+		 * We compare the abs of the results because the values of T depend on V which are the 
+		 * eigenvectors of the mixing matrix. Since eigenvectors are sign invariant, the result might have a different sign.
+		 */
+		TestUtils.assertDeepEquals(MyMatrixUtils.matrix_abs(expectedT), MyMatrixUtils.matrix_abs(actualT), 7);
+	}
+	
+
+}

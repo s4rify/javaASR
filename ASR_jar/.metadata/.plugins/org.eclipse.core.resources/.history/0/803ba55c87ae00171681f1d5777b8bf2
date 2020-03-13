@@ -1,0 +1,158 @@
+package com.asr.sab.proc;
+
+import java.util.stream.IntStream;
+
+import org.apache.commons.math3.linear.Array2DRowRealMatrix;
+import org.apache.commons.math3.linear.RealMatrix;
+
+import com.asr.sab.cal.ASR_Calibration;
+import com.asr.sab.utils.SampleBuffer;
+
+/**
+ * Created by Sarah Blum on 9/21/17
+ * Carl von Ossietzky Univesity of Oldenburg.
+ */
+public class ASR_Process {
+
+	public ASR_Calibration state;
+	public int N,P;
+	public double window_len = 0.5;
+	public double lookahead = window_len/2;
+	public double[][] carry;
+	
+	static IntStream reverseStream(int from, int to) {
+	    return IntStream.range(from, to).map(i -> to - i + from - 1);
+	}
+
+
+	/**
+	 * When initially creating an object for the processing, we need the information that we
+	 * calculated in the calibration.
+	 * The ASR_Calibration object contains 
+	 * 		- a mixing matrix
+	 * 		- a threshold matrix
+	 * 		- filter coefficients
+	 * 
+	 * @param state an object from the class {@link ASR_Calibration} which has been
+	 * 		created and filled during the calibration process with clean data. 
+	 * 		The information it contains are needed for the processing.
+	 */
+	public ASR_Process(ASR_Calibration state, int sRate) {
+		this.state = state;
+		this.N = (int)(window_len * sRate);
+		this.P = (int)(lookahead * sRate);
+		this.P = 10; // TODO debug
+	}
+
+	/**
+	 * When processing data in a sliding window offline, we repeatedly call this method.
+	 * The SampleBuffer contains the current sliding window (which contains the current
+	 * sample to be treated and a portion of look-ahead and look-back data). 
+	 * 
+	 * When finished, we return a cleaned data chunk and implicitly an updated state object
+	 * which will be used for the next call of this method.
+	 */
+	public void asr_process(SampleBuffer dataChunk) {
+
+		double[][] data = dataChunk.extract_data_from_buffer(); // channels in rows, samples in columns
+		/*
+		 * init carry if empty (because we are in the first iteration of processing) 
+		 */
+		// TODO if empty: 
+		this.carry = init_carry(data);
+
+		/*
+		 * filter data 
+		 */
+
+		/*
+		 * compute running mean covariance >.<
+		 */
+
+		/*
+		 * estimate reconstruction matrix R
+		 */
+
+		/*
+		 * do the reconstruction and the artefact detection
+		 * 
+		 *  1) do a PCA to find artefact components
+		 *  2) determine which components to keep
+		 *  3) update R
+		 *  4) apply reconstruction (using raised-cosine-blending) WHAT
+		 */
+
+		/*
+		 * fill carry
+		 */
+
+		/*
+		 * tadaa
+		 */
+	}
+
+	/**
+	 * When we are in the very first iteration of processing, the carry part is empty.
+	 * Therefore, we interpolate a few samples from the exisiting data that we are 
+	 * processing and initialize carry with it:
+	 * state.carry = repmat(2*data(:,1),1,P) - data(:,1+mod(((P+1):-1:2)-1,S))
+	 * 
+	 * 
+	 * @param data the current data chunk
+	 * @return	carry
+	 */
+	public double[][] init_carry(double[][] data) {
+		double[][] result = new double[data.length][data[0].length*2];
+
+		/*
+		 * repmat(2*data(:,1),1,P)
+		 */
+		// double each value from the first sample
+		RealMatrix dataM = new Array2DRowRealMatrix(data);
+		dataM = dataM.getColumnMatrix(0).scalarMultiply(2);
+		// replicate the first sample P times 
+		double[][] replicatedSample = new double[P][data[0].length];
+		for (int i = 0; i < P; i++) {
+			replicatedSample[i] = dataM.getColumn(0);
+		}
+
+		
+		/*
+		 * data(:,1+mod(((P+1):-1:2)-1,S)
+		 * -> for us: get P-1 samples sorted from new (index P) to old (index 0) 
+		 */
+/*		int[] channelRange = IntStream.rangeClosed(0, data.length-1).toArray(); // all rows -> all channels
+
+		int from = 1;
+		int to = P;
+		int[] sampleRange = new int[P-1]; 
+		sampleRange = IntStream.range(from, to).map(i -> to - i + from - 1).toArray();
+		
+		double[][] samplesFromNewToOld = new double[2][P];
+//		dataOrig.copySubMatrix(channelRange, sampleRange, samplesFromNewToOld);
+*/
+		int i = 0;
+		double[][] samplesFromNewToOld = new double[data.length][P+1];
+		for (int c = 0; c < data.length; c++) {
+			for (int s = P; s > 1; s--) {
+				samplesFromNewToOld[c][i] = data[c][s];
+				i++;
+			}
+			
+		}
+		
+		/* 
+		 * subtract elements: repmat(2*data(:,1),1,P) - data(:,1+mod(((P+1):-1:2)-1,S))
+		 * -> replicated duplicated samples minus newest to oldest samples 
+		 */
+		result = new Array2DRowRealMatrix(replicatedSample).subtract(new Array2DRowRealMatrix(samplesFromNewToOld)).getData(); 
+		return result;
+	}
+
+
+
+
+
+
+
+}

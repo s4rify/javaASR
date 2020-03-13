@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?><testrun name="UT_ASR_Calibration" project="ASR_Tests" tests="8" started="3" failures="0" errors="0" ignored="0">
+  <testsuite name="com.asr.sab.proc.UT_ASR_Calibration" incomplete="true">
+    <testcase name="test_thresholdMatrix_calculation" classname="com.asr.sab.proc.UT_ASR_Calibration" time="0.111"/>
+    <testcase name="test_componentActivationCalculation" classname="com.asr.sab.proc.UT_ASR_Calibration" time="0.086"/>
+    <testcase name="test_sig_calculation" classname="com.asr.sab.proc.UT_ASR_Calibration" incomplete="true"/>
+    <testcase name="test_RMSCalculation" classname="com.asr.sab.proc.UT_ASR_Calibration" incomplete="true"/>
+    <testcase name="test_mu_calculation" classname="com.asr.sab.proc.UT_ASR_Calibration" incomplete="true"/>
+    <testcase name="general_calibration_test_M" classname="com.asr.sab.proc.UT_ASR_Calibration" incomplete="true"/>
+    <testcase name="general_calibration_test_T" classname="com.asr.sab.proc.UT_ASR_Calibration" incomplete="true"/>
+    <testcase name="test_MixingMatrixCalculation" classname="com.asr.sab.proc.UT_ASR_Calibration" incomplete="true"/>
+  </testsuite>
+</testrun>

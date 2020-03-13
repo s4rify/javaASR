@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring comment="Rename method &apos;com.asr.sab.utils.Proc_Utils.filter_data_250(...)&apos; to &apos;filter_data&apos;&#x0D;&#x0A;- Original project: &apos;asr_jar&apos;&#x0D;&#x0A;- Original element: &apos;com.asr.sab.utils.Proc_Utils.filter_data_250(...)&apos;&#x0D;&#x0A;- Renamed element: &apos;com.asr.sab.utils.Proc_Utils.filter_data(...)&apos;&#x0D;&#x0A;- Update references to refactored element" delegate="false" deprecate="false" description="Rename method &apos;filter_data_250&apos;" flags="589830" id="org.eclipse.jdt.ui.rename.method" input="/src&lt;com.asr.sab.utils{Proc_Utils.java[Proc_Utils~filter_data_250~\[\[D" name="filter_data" references="true" stamp="1528798738433" version="1.0"/>
+</session>

@@ -1,0 +1,3 @@
+This project contains the signal processing parts of the asr method for java.
+The source folder is linked from the folder ../ASR_Service which is the Android service for the asr method.
+The Git handling is also done in the service project.

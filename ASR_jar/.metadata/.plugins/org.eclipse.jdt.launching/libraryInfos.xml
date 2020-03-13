@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<libraryInfos>
+<libraryInfo home="C:\Program Files\Java\jre1.8.0_121" version="1.8.0_121">
+<bootpath>
+<entry path="C:\Program Files\Java\jre1.8.0_121\lib\resources.jar"/>
+<entry path="C:\Program Files\Java\jre1.8.0_121\lib\rt.jar"/>
+<entry path="C:\Program Files\Java\jre1.8.0_121\lib\sunrsasign.jar"/>
+<entry path="C:\Program Files\Java\jre1.8.0_121\lib\jsse.jar"/>
+<entry path="C:\Program Files\Java\jre1.8.0_121\lib\jce.jar"/>
+<entry path="C:\Program Files\Java\jre1.8.0_121\lib\charsets.jar"/>
+<entry path="C:\Program Files\Java\jre1.8.0_121\lib\jfr.jar"/>
+<entry path="C:\Program Files\Java\jre1.8.0_121\classes"/>
+</bootpath>
+<extensionDirs>
+<entry path="C:\Program Files\Java\jre1.8.0_121\lib\ext"/>
+<entry path="C:\WINDOWS\Sun\Java\lib\ext"/>
+</extensionDirs>
+<endorsedDirs>
+<entry path="C:\Program Files\Java\jre1.8.0_121\lib\endorsed"/>
+</endorsedDirs>
+</libraryInfo>
+<libraryInfo home="/usr/lib/jvm/java-ibm-x86_64-80" version="1.8.0_151">
+<bootpath>
+<entry path="/usr/lib/jvm/java-ibm-x86_64-80/jre/lib/amd64/compressedrefs/jclSC180/vm.jar"/>
+<entry path="/usr/lib/jvm/java-ibm-x86_64-80/jre/lib/se-service.jar"/>
+<entry path="/usr/lib/jvm/java-ibm-x86_64-80/jre/lib/cuda4j.jar"/>
+<entry path="/usr/lib/jvm/java-ibm-x86_64-80/jre/lib/math.jar"/>
+<entry path="/usr/lib/jvm/java-ibm-x86_64-80/jre/lib/ibmorb.jar"/>
+<entry path="/usr/lib/jvm/java-ibm-x86_64-80/jre/lib/ibmorbapi.jar"/>
+<entry path="/usr/lib/jvm/java-ibm-x86_64-80/jre/lib/ibmcfw.jar"/>
+<entry path="/usr/lib/jvm/java-ibm-x86_64-80/jre/lib/ibmpkcs.jar"/>
+<entry path="/usr/lib/jvm/java-ibm-x86_64-80/jre/lib/ibmcertpathfw.jar"/>
+<entry path="/usr/lib/jvm/java-ibm-x86_64-80/jre/lib/ibmjgssfw.jar"/>
+<entry path="/usr/lib/jvm/java-ibm-x86_64-80/jre/lib/ibmjssefw.jar"/>
+<entry path="/usr/lib/jvm/java-ibm-x86_64-80/jre/lib/ibmsaslfw.jar"/>
+<entry path="/usr/lib/jvm/java-ibm-x86_64-80/jre/lib/ibmjcefw.jar"/>
+<entry path="/usr/lib/jvm/java-ibm-x86_64-80/jre/lib/ibmjgssprovider.jar"/>
+<entry path="/usr/lib/jvm/java-ibm-x86_64-80/jre/lib/ibmjsseprovider2.jar"/>
+<entry path="/usr/lib/jvm/java-ibm-x86_64-80/jre/lib/ibmcertpathprovider.jar"/>
+<entry path="/usr/lib/jvm/java-ibm-x86_64-80/jre/lib/xmldsigfw.jar"/>
+<entry path="/usr/lib/jvm/java-ibm-x86_64-80/jre/lib/xml.jar"/>
+<entry path="/usr/lib/jvm/java-ibm-x86_64-80/jre/lib/charsets.jar"/>
+<entry path="/usr/lib/jvm/java-ibm-x86_64-80/jre/lib/resources.jar"/>
+<entry path="/usr/lib/jvm/java-ibm-x86_64-80/jre/lib/rt.jar"/>
+<entry path="/usr/lib/jvm/java-ibm-x86_64-80/jre/lib/dataaccess.jar"/>
+</bootpath>
+<extensionDirs>
+<entry path="/usr/lib/jvm/java-ibm-x86_64-80/jre/lib/ext"/>
+</extensionDirs>
+<endorsedDirs>
+<entry path="/usr/lib/jvm/java-ibm-x86_64-80/jre/lib/endorsed"/>
+</endorsedDirs>
+</libraryInfo>
+</libraryInfos>

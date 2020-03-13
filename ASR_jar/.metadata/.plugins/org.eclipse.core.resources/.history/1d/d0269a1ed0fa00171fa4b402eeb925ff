@@ -1,0 +1,624 @@
+package com.asr.sab.utils;
+
+import static com.asr.sab.utils.MyMatlabUtils.bsxfun;
+import static com.asr.sab.utils.MyMatlabUtils.reshape_2_to_3;
+import static com.asr.sab.utils.MyMatlabUtils.reshape_3_to_2;
+
+import java.util.Arrays;
+import java.util.Objects;
+import java.util.function.DoubleBinaryOperator;
+import java.util.stream.IntStream;
+
+import org.apache.commons.math3.linear.Array2DRowRealMatrix;
+import org.apache.commons.math3.linear.MatrixUtils;
+import org.apache.commons.math3.linear.RealMatrix;
+import org.apache.commons.math3.linear.SingularValueDecomposition;
+
+import la.matrix.DenseMatrix;
+import la.matrix.Matrix;
+import ml.utils.Matlab;
+
+public class Proc_Utils {
+	
+	private static final double CONTAINS_ARTIFACT = 0.0;
+	private static final double IS_CLEAN = 1.0;
+	
+	/**
+	 * When we are in the very first iteration of processing, the carry part is empty.
+	 * Therefore, we interpolate a few samples from the exisiting data that we are 
+	 * processing and initialize carry with it:
+	 * state.carry = repmat(2*data(:,1),1,P) - data(:,1+mod(((P+1):-1:2)-1,S))
+	 * 
+	 * 
+	 * @param   data 		the current data chunk
+	 * 			P			how many times do want to replicate the first sample: P = round((windowlen/2)*srate);
+	 * @return	carry
+	 */
+	public static double[][] init_carry(double[][] data, int P) {
+		
+		Objects.requireNonNull(data);
+		/*
+		 * repmat(2*data(:,1),1,P)
+		 */
+		// double each value from the first sample
+		RealMatrix dataM = new Array2DRowRealMatrix(data);
+		dataM = dataM.getColumnMatrix(0).scalarMultiply(2);
+		// replicate the first sample P times 
+		double[][] replicatedSample = new double[P][data[0].length];
+		for (int i = 0; i < P; i++) {
+			replicatedSample[i] = dataM.getColumn(0);
+		}
+		
+		/*
+		 * data(:,1+mod(((P+1):-1:2)-1,S)
+		 * -> for us: get P-1 samples sorted from new (index P) to old (index 0) 
+		 */
+		int i = 0;
+		double[][] samplesOldToNew = new double[data.length][P];
+		for (int c = 0; c < data.length; c++) {
+			i = 0;
+			for (int s = P; s > 0; s--) {
+				samplesOldToNew[c][i] = data[c][s];
+				i++;
+			}
+		}
+		
+		/* 
+		 * subtract elements: repmat(2*data(:,1),1,P) - data(:,1+mod(((P+1):-1:2)-1,S))
+		 * -> replicated duplicated samples minus newest to oldest samples 
+		 */
+		return new Array2DRowRealMatrix(replicatedSample)
+				.transpose()
+				.subtract(new Array2DRowRealMatrix(samplesOldToNew))
+				.getData(); 
+		
+	}
+	
+	/*
+	 * This code takes samples from Xcov at stepsize distance and collects them. 
+	 * Xcov(:,update_at)
+	 * 
+	 * Iterate through the Xcov matrix in stepsize - bins.
+	 * The first and last entry of Xcov is always chosen for further use and collected in Xsegmnts.
+	 * The intermediate samples are taken successively with a distance of stepsize.
+	 * 
+	 */
+	public static double[][][] extract_Xcov_at_stepsize(double[][] Xcov, int stepsize, int C) {
+        
+		double[][] indexedXcov = new double[Xcov.length][(int)Math.ceil(Xcov[0].length/stepsize)-1];
+		int s = 0;
+		for (int i = 0; i < indexedXcov.length; i++) { 		// rows
+			for (int j = 0; j < indexedXcov[0].length; j++) {	// columns
+				// take all row entries at position stepsize and collect them
+				indexedXcov[i][j] = Xcov[i][Math.max(s-1, 0)];
+				s+= stepsize;
+			}
+			s = 0;
+		}
+		
+		return MyMatlabUtils.reshape_2_to_3(indexedXcov, indexedXcov[0].length, C, C);
+	}
+	
+	
+
+	/**
+	 * The reconstruction matrix R is computed using the Eigendecomposition of M, the threshold operator and
+	 * the mixing matrix M of the signal X.
+	 * 
+	 * In the paper: 			R = V * M * pinv( M x U) * V'
+	 * In the Matlab code: 		R = M * pinv( (V'*M) x U')	* V'
+	 * Hm. What do we make of that?
+	 * 
+	 * @param e		Eigendecomposition of the covariance matrix of X
+	 * @param keep	The threshold operator 
+	 * @param M		The mixing matrix which is the square root matrix of the sample covariance matrix of X
+	 * @param C		The number of channels in X
+	 * @return
+	 * 				The reconstruction matrix R which is applied to X in a later step.
+	 */
+	public static double[][] compute_R(double[][] V, double[] keep, double[][] M, int C) {
+		
+		// V'*M 
+		double[][] VM = MyMatrixUtils.array_multiplication(MyMatrixUtils.transpose(V), M);
+		
+		// keep'* (V'*M)
+		double[][] kVM = new double[C][C];
+		for (int i = 0; i < VM.length; i++) {
+			for (int j = 0; j < VM[0].length; j++) {
+				kVM[i][j] = VM[i][j] * keep[i];
+			}
+		}
+		
+		
+		// pinv = pinvfun(bsxfun(@times,keep',V'*M))
+		double[][] pinv = new SingularValueDecomposition(MatrixUtils.createRealMatrix(kVM)).getSolver().getInverse().getData();
+		
+		// M * pinv 
+	    double[][] Mpinv = MyMatrixUtils.array_multiplication(M, pinv);
+		
+	    // Mpinv * V' 
+		double [][] R = MyMatrixUtils.array_multiplication(Mpinv, MyMatrixUtils.transpose(V));
+		
+		// omg.
+		return R;
+	}
+
+				
+	/**
+	 * Matrix multiplication method.
+	 * 
+	 * @param m1
+	 *            Multiplicand
+	 * @param m2
+	 *            Multiplier
+	 * @return Product
+	 */
+	public static double[][] m_times(double[][] m1, double[][] m2) {
+		int m1ColLength = m1[0].length; // m1 columns length
+		int m2RowLength = m2.length; // m2 rows length
+		
+		if (m1ColLength != m2RowLength)
+			throw new NumberFormatException("Matrix dimensions must agree!"); // matrix multiplication is not possible
+		
+		int mRRowLength = m1.length; // m result rows length
+		int mRColLength = m2[0].length; // m result columns length
+		
+		double[][] mResult = new double[mRRowLength][mRColLength];
+		for (int i = 0; i < mRRowLength; i++) { // rows from m1
+			for (int j = 0; j < mRColLength; j++) { // columns from m2
+				for (int k = 0; k < m1ColLength; k++) { // columns from m1
+					mResult[i][j] += m1[i][k] * m2[k][j];
+				}
+			}
+		}
+		return mResult;
+	}
+
+	/**
+	 *TODO Put in ProcessUtils
+	 *
+	 * The calculation of the threshold operator U. 
+	 * U = 0 if std of the current segment k > t(k), where t element threshold matrix T 
+	 * U = 1 else.
+	 * 
+	 * This threshold operator is used to decide which components to keep for later use and which
+	 * components contain artefacts and must be replaced by the content of R.
+	 * 
+	 * @param C			Number of channels in the signal
+	 * @param T			The threshold matrix, calculated either in the calibration or an earlier run of the processing
+	 * @param maxdims	I have no idea.
+	 * @param e			The Eigendecomposition of the covariance matrix of the signal X.
+	 * @return	
+	 * 					The threshold operator U (here keep) which is a double vector that contains
+	 * 					a 1.0 (true) for every channel which does not contain artifacts and can be kept as is
+	 * 					and a 0.0 for every channel that contains artifacts and cannot be kept as is. 
+	 */
+	public static double[] compute_threshold_operator(int C, double[][] T, double maxdims, double[][] V, double[] D) {
+		/*
+		 * determine which components to keep (variance below directional threshold or not admissible for rejection)
+		 * keep = D<sum((T*V).^2) | (1:C)<(C-maxdims);
+		 * keep = D < sumsqTV	  |
+		 */
+		double[][] TV = MyMatrixUtils.array_multiplication(T, V);	
+		
+		double[] sumsqTV = compute_sumSquare(TV);
+		
+		/*
+		 * keep = D < sumsqTV
+		 */
+		double[] keep = new double[sumsqTV.length];
+		int[] channelRange = IntStream.rangeClosed(0,C-1).toArray();
+		double dim = C - maxdims;
+
+		for (int j = 0; j < TV[0].length; j++) {
+			
+			if(D[j] < sumsqTV[j] || channelRange[j] < dim){ // only use the first row, becaus it contains all eigenvalues 
+				keep[j] = IS_CLEAN;
+			} else {
+				keep[j] = CONTAINS_ARTIFACT;
+			}
+		}
+		return keep;
+	}
+
+	
+	/*
+	 * TODO write a test for this & comment input and output
+	 */
+	public static double[] compute_sumSquare(double[][] TV) {
+		double[] sumsqTV = new double[Math.max(TV.length, TV[0].length)]; 
+		/*
+		 * sum((T*V).^2)
+		 */
+		for (int i = 0; i < TV.length; i++) {
+			for (int j = 0; j < TV[0].length; j++) {
+				double curElem = TV[j][i];
+				sumsqTV[i] += curElem * curElem;
+			}
+		}
+		return sumsqTV;
+	}
+	
+	
+	
+
+	/**
+	 * In this method, the original raw data chunk rawData is cleaned with the reconstruction matrix.
+	 * 
+	 * @param C			channel number
+	 * @param data	the original input data which is multiplied with the reconstruction matrix R
+	 * @param n			the current index n until which we clean the data 
+	 * @param last_n	the previos index n from which on we clean the data 
+	 * @param R			the holy reconstruction matrix
+	 * @return			an unfiltered, but cleaned up signal 
+	 */
+	public static double[][] reconstruct_data(int C, double[][] data,  double[][] R, int stepsize, double[][] last_R, int[] subrange) {
+		/*
+		 * apply R to intermediate samples (raised-cosine blending)
+		 * use update_at as index: always take stepsize-1 samples and go stepsize-1 samples further 
+		 * blend = (1-cos(pi*(1:(n-last_n))/(n-last_n)))/2;
+		 */
+
+		int len = subrange.length;		
+		// nearly good
+		double[] blend = Arrays.stream(subrange).mapToDouble(t -> (t * Math.PI)/(len))
+												.map(t -> (1 - Math.cos(t)) / 2)
+												.sorted()
+												.toArray();
+
+		/*
+		 *  firstPart = bsxfun(@times, blend, R*X(:,subrange))
+		 */
+		int startChannel = 0;
+		int endChannel = data.length-1;
+		int startSubRange = subrange[0];
+		int endSubRange = subrange[subrange.length-1];
+		
+
+		RealMatrix dataRange = new Array2DRowRealMatrix(data).getSubMatrix(startChannel, endChannel, startSubRange, endSubRange);
+		double[][] RX = MatrixUtils.createRealMatrix(R).multiply(dataRange).getData();
+		double[][] firstPart = new double[len][C];
+		for (int s = 0; s < len; s++) { 				
+			for (int c = 0; c < C; c++) { 				
+				firstPart[s][c] = blend[s] * RX[c][s];  //TODO changed this, and it is not transposed anymore
+			}
+		}
+		
+		
+		/*
+		 * secondPart = bsxfun(@times,1-blend,state.last_R*X(:,subrange))
+		 */
+		double[][] last_RX = MatrixUtils.createRealMatrix(last_R).multiply(dataRange).getData();
+		double[] invertedBlend = MyMatlabUtils.subtract_constant_1d(1.0, blend);
+		double[][] secondPart = new double[len][C];
+		for (int s = 0; s < len; s++) { 				
+			for (int c = 0; c < C; c++) { 					
+				secondPart[s][c] = invertedBlend[s] * last_RX[c][s]; // TODO changed this and it is not transposed anymore 
+			}
+		}
+		
+		/*
+		 * X(:,subrange) = bsxfun(@times, blend, R*X(:,subrange)) + bsxfun(@times,1-blend,state.last_R*X(:,subrange));
+		 * X(:,subrange) = firstPart + secondPart;
+		 * Xsub has samples x channels here
+		 */
+		double[][] Xsub =  new Array2DRowRealMatrix(firstPart).add(new Array2DRowRealMatrix(secondPart)).getData();
+		
+		return Xsub;
+	}
+	
+	
+	
+	/**
+	 * Delegate method to the filter.
+	 * 
+	 * 
+	 * @param data		the unfiltered, but enlarged current datachunk. it is enlarged
+	 * 							by the previous datachunk, to give the filter more input. 
+	 * @return					filtered data with the same dimensions as the input. 
+	 */
+	public static double[][] filter_data_250(double[][] data) {
+		
+	    double[] B = {1.7587013141770287, -4.3267624394458641,  5.7999880031015953,
+	            -6.2396625463547508,  5.3768079046882207, -3.7938218893374835,  2.1649108095226470,
+	            -0.8591392569863763,  0.2569361125627988};
+
+	    double[] A = {1.0000000000000000, -1.7008039639301735,  1.9232830391058724,
+	            -2.0826929726929797,  1.5982638742557307, -1.0735854183930011,  0.5679719225652651,
+	            -0.1886181499768189,  0.0572954115997261};
+		/*
+		 * filter data 
+		 */
+		double[][] X = new double[data.length][data[0].length];
+        double[] channelVal;
+        for (int c = 0 ; c < data.length; c++){
+            channelVal = MyMatrixUtils.filter_one_channel(B, A, data[c]);
+            X[c] = channelVal; // rows = channels
+        }
+		return X;
+	}
+
+	/**
+	 * This corresponds to the following line in Matlab: data = [state.carry data] and is used to 
+	 * enlarge the current data segment for the filter.
+	 * 
+	 * @param rawData		The processing data, unfiltered 
+	 * @param carry			The carry portion of the data which is computed in initcarry
+	 * @return				An enlarged data segment 
+	 */
+	public static double[][] pad_data_with_previous_segment(double[][] rawData, double[][] carry) {
+		Matrix datMat = new DenseMatrix(rawData);
+		Matrix carryMat = new DenseMatrix(carry);
+		
+		// put carry data in front of data 
+		double[][] paddedData = Matlab.cat(2, carryMat, datMat).getData();
+		return paddedData;
+	}
+	
+	
+	
+	/**
+	 * This corresponds to the following line in Matab: [D,order] = sort(reshape(diag(D),1,C)); 
+	 * It gets the diagonal of the egigenvalues matrix and sorts them in ascending order. 
+	 * The implementation of the Eigendecomposition in Apache Commons Math is computing the 
+	 * eigenvectors in the desired order already, so this method only extracts the diagonal here.
+	 * 
+	 * @param C			Channel count
+	 * @param D			The matrix of eigenvalues of the current covariance matrix
+	 * @return			An eigenvalue per channel in ascending order
+	 */
+	public static double[] sortD(int C, double[][] D) {
+		double[] diagD = new double[C];
+		for (int c = C-1; c >= 0; c--) {
+			diagD[(C-1)-c] = D[c][c]; 		// resort and extract diagonal
+		}
+		return diagD;
+	}
+
+
+	/**
+	 * This corresponds to the following line in Matlab: V = V(:,order); where order is determined 
+	 * by the eigenvalues.
+	 * 
+	 * @param C		Channel number 
+	 * @param V		The matrix of eigenvalues as returned by the Apache Commons Math library.
+	 * @return
+	 */
+	public static double[][] sortV(int C, double[][] V) {
+		double[][] Vsort = new double[C][C];
+		int cc = C-1;
+		for (int i = 0; i < Vsort.length; i++) {
+			for (int j = 0; j < Vsort.length; j++) {
+				Vsort[j][cc] = V[j][i];
+			}
+			cc--;;
+		}
+		return Vsort;
+	}
+	
+	
+	
+
+	/**
+	 * For every iteration of the loop in which we clean the rawData in chunks of size stepsize, we need a 
+	 * current cross covariance matrix. 
+	 * This method extracts the correct matrix from the threedimensional Xcov structure.
+	 * 
+	 * @param C			number of channels
+	 * @param Xcov3		the big cross covariance structure which holds all xcov matrices we need during the whole processing
+	 * @param u			the loop index for the cleaning
+	 * @return			the current cross covariance matrix, a two dimensional array
+	 */
+	public static double[][] computeCurrentXcov(int C, double[][][] Xcov3, int u) {
+		double[][] curXcov = new double[C][C];
+		for (int i = 0; i < curXcov.length; i++) {
+			for (int j = 0; j < curXcov.length; j++) {
+				curXcov[i][j] = Xcov3[u][j][i];
+			}
+		}
+		return curXcov;
+	}
+	
+	
+	
+	
+	/**
+	 * This method corresponds to this line in Matlab:
+	 * <p>
+	 * <pre>
+	 * [Xcov,state.cov] = moving_average(N,reshape(bsxfun(@times,reshape(X,1,C,[]),reshape(X,C,1,[])),C*C,[]),state.cov);
+	 * </pre>
+	 * It computes a smoothing average over the covariance matrix. The resulting covariance matrix is NOT of the 
+	 * dimensions channel x channel, but instead it has much higher dimensions, as it keeps the time information
+	 * and expands the samples accordingly.
+	 * 
+	 * 
+	 * @param N			computed as {@code N = round(windowlen * srate);}
+	 * @param X			input which is filtered and padded with the carry content 
+	 * @param prevCov	Optional input of a previous covariance matrix. If this is the first call to
+	 * 					the method, omit the input. If we have been processing before, provide the previous 
+	 * 					covariance matrix here. The content of prevCov is simulated (by padding zeros to X) if
+	 * 					this parameter is empty. May be <code>null</code> when we don't have a covariance
+	 * 					matrix from a previous processing step. The {@code prevcov} matrix then gets initialized with 0s.
+	 * 
+	 */
+	public static double[][] compute_cross_cov(int N, double[][] X) {
+		/* 
+		 * transfrom input because why not:
+		 * U = reshape(bsxfun(@times,reshape(X,1,C,[]),reshape(X,C,1,[])),C*C,[])
+		 */
+		int C = X.length;
+        int samples = X[0].length;
+        
+        // f = (reshape(X,1,C,[]))
+        double[][][] f = reshape_2_to_3(X, samples, 1, C);
+        
+        // g = (reshape(X,C,1,[]))
+        double[][][] g = reshape_2_to_3(X, samples, C, 1);
+        
+        // m = bsxfun(@times,f,g)
+        final DoubleBinaryOperator TIMES = (double a, double b) -> a * b;
+        double[][][] m = bsxfun(f, g, TIMES);
+        
+        // U = reshape(m,C*C,[])
+        double[][] U = MyMatrixUtils.transpose(reshape_3_to_2(m, samples, C*C));
+        
+		/*
+		 * check if we have a previous Xcov matrix in the state object
+		 * and handle the shit out of it:
+		 * - prepend the old Xcov matrix to U
+		 * - if we don't have a previous cov matrix: initialize fake-state.cov  and prepend that
+		 * 
+		 */
+    	/*if (prevCov.length == 0 ) { //(prevCov == null) { 
+    		//prevCov = zeros(size(X,1),N)
+    		prevCov = new double[U.length][N];
+    	}*/
+        
+        double[][] prevCov = new double[U.length][N];
+    	
+    	/*
+    	 * prepend Xcov: Y = [prevCov X]; 
+    	 */
+    	double[][] Y = Matlab.cat(2, new DenseMatrix(prevCov), new DenseMatrix(U)).getData(); 
+    	// M = size(Y,2);
+        int M = Y[0].length-1; 
+		
+        /*
+		 * compute some index shit because why not
+		 * I = [1:M-N; 1+N:M];
+		 */
+        int[] range1 = IntStream.rangeClosed(0, M-N).toArray();
+        int[] range2 = IntStream.rangeClosed(0+N, M).toArray();
+		int[][] I = {range1, range2}; 
+		I = MyMatrixUtils.transpose(I);
+		
+		/*
+		 * this is a matrix in matlab: S = [-ones(1,M-N); ones(1,M-N)]/N;
+		 */
+		double S1 = 1.0/N;
+		double S2 = -1.0/N;
+		
+		/*
+		 * Use I to index Y: Y(:,I(:)).
+		 * By doing this, we take some samples (columns) from Y and smooth them by multiplying them
+		 * with the divisor stored in S (which in Matlab is a matrix for itself).
+		 * This is basically smoothing.
+		 * 
+		 */
+		double[][] YI = new double[I.length*2][Y.length]; 
+		
+		int n1 = 0;
+		double divisor = S1;
+		for (int i = 0; i < I.length; i++) {
+			for (int j = 0; j < I[0].length; j++) {
+				for (int n = 0; n < Y.length; n++) {
+					YI[n1][n] = Y[n][I[i][j]];
+					YI[n1][n] *= divisor;
+				}
+				n1++;
+				/*
+				 * multiply the columns alternatingly with the content of S
+				 * bsxfun(@times,YI, S(:)') where 
+				 * S contains 1.0/N and -1.0/N in its columns
+				 */
+				if (n1 %2 != 0) {
+					divisor = S2;
+				} else {
+					divisor = S1;
+				}
+			}
+		}
+
+		YI = MyMatrixUtils.transpose(MyMatrixUtils.cumsumfun(YI)); 
+		
+		/*
+		 *  keep every second column: X = X(:,2:2:end);
+		 */
+		int index = 0;
+		double[][] Xcov = new double[YI.length][YI[0].length/2];
+		for (int i = 0; i < Xcov.length; i++) {
+			for (int j = 1; j < YI[0].length; j+=2) {
+				
+				Xcov[i][index] = Math.abs(YI[i][j]);
+				index++;
+			}
+			index = 0;
+		}
+		
+		//this.prevCov = computeStateCov(N, Y, Xcov);
+		return Xcov; 
+	}
+	
+	
+	
+	
+	/**
+	 * This is not called, because we do not intend to use this method on big chunks of data
+	 * that need to be split internally before processing them.
+	 * For this "offline use case" the processing method needs state, this is one field
+	 * of the state object.
+	 * 
+	 * Zf = [-(X(:,end)*N- Y(:,end-N+1)) Y(:,end-N+2:end)];
+	 */
+	public double[][] computeStateCov(int N, double[][] Y, double[][] XX) {
+		
+		/*
+		 * chunkY = Y(:,end-N+2:end)
+		 * take all rows and (last column-N+2 until last)
+		 */
+		int startRow = 0;
+		int endRow = Y.length-1;
+		int startCol = Y[0].length-N+1; // compensate off by one error: this is -2 in Matlab
+		int endCol = Y[0].length-1;
+		double[][] chunkY = MatrixUtils.createRealMatrix(Y).getSubMatrix(startRow, endRow, startCol, endCol).getData(); 
+		
+		/*
+		 *  multiply last column of X (here out) by N and negate it
+		 *  tailX = -(X(:,end)*N
+		 */
+		double[] tailX = MatrixUtils.createRealMatrix(XX).scalarMultiply(-1).getColumn(XX.length-1);
+		tailX = Arrays.stream(tailX).map(i -> i * N).toArray();
+		
+		/*
+		 * take last-N column of Y 
+		 * tailY = Y(:,end-N+1)
+		 */
+		double[] tailY = MatrixUtils.createRealMatrix(Y).getColumn(Y.length - N);
+		
+		/*
+		 * subtract last-N column of Y from the X range 
+		 * zf = -(X(:,end)*N-Y(:,end-N+1))
+		 */
+		double[] zf = new double[tailX.length];
+		for (int i = 0; i < zf.length; i++) {
+			zf[i] = tailX[i] - tailY[i];
+		}
+		
+		/*
+		 * fill in the subtracted column-part at the beginning of the output
+		 * cov = [-(X(:,end)*N- Y(:,end-N+1)) Y(:,end-N+2:end)];
+		 * cov = [zf chunkY] 
+		 */
+		//cov[0] = zf
+		//cov[rest] = chunkY
+		double[][] statecov = new double[chunkY.length][chunkY[0].length];
+		int z = 0;
+		for (int j = 0; j < statecov.length; j++) {
+			for (int k = 0; k < statecov[0].length; k++) {
+				// prepend first part into the first column
+				if(j == 0) {
+					statecov[j][k] = zf[z];
+					z++;
+				// then add the rest 
+				} else {
+					statecov[j][k] = chunkY[j][k];
+				}
+			}
+		}
+		return statecov;
+	}
+
+	
+
+}

@@ -1,0 +1,14 @@
+1541510945735	Delete element
+1541853748941	Move member 'filter_one_channel'
+1541858199092	Rename field 'state'
+1541860270179	Rename local variable 'X'
+1541860304700	Rename local variable 'channelVal'
+1541861240069	Rename local variable 'i'
+1541862805164	Rename local variable 'xs'
+1541862825889	Rename local variable 'ys'
+1541862831489	Rename local variable 'xs'
+1541871580732	Rename local variable 'max_i'
+1541871616142	Rename local variable 'max_j'
+1541873123331	Inline method 'filter_data'
+1541873167910	Convert local variable 'filter' to field
+1541873593151	Inline method 'filter_data'

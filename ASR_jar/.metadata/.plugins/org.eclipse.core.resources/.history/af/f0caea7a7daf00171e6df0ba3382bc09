@@ -1,0 +1,213 @@
+package com.asr.sab.debug;
+
+import static com.asr.sab.utils.MyMatrixUtils.*;
+
+import java.awt.geom.FlatteningPathIterator;
+import java.util.Arrays;
+import java.util.function.DoubleBinaryOperator;
+
+import org.apache.commons.math3.linear.Array2DRowFieldMatrix;
+import org.apache.commons.math3.linear.Array2DRowRealMatrix;
+import org.apache.commons.math3.linear.RealMatrix;
+
+import com.asr.sab.cal.ASR_Calibration;
+import com.asr.sab.proc.ASR_Process;
+
+import la.matrix.DenseMatrix;
+import la.matrix.Matrix;
+import ml.utils.Matlab;
+
+
+public class ProcTest {
+
+	public static void main(String[] args) {
+		
+		int sRate = 100;
+		
+        /* 
+         * compose input X
+         */
+    	double[][] X = new double[2][20];
+
+        for (int i = 0; i < 20; i++) {
+            double addend = 0.01 * i;
+            X[0][i] = 1.01 + addend;
+            X[1][i] = 4.01 + addend;
+        }
+        
+        /*
+         * ------------------------- CALIBRATION -----------------------------------------
+         */
+        int blocksize = 5;
+		double[][] M = calculate_mixingMatrix(X, blocksize);
+		double window_overlap = 0.66;
+		double N = 5;
+		double[][] T = calculate_thresholdMatrix(X, M, window_overlap, N);
+        
+		ASR_Calibration state = new ASR_Calibration(2);
+		state.M = M;
+		state.T = T;
+		// -------------------------------------------------------------------------------
+		
+		// ----------------------------PROCESSING ----------------------------------------
+		ASR_Process proc = new ASR_Process(state, sRate);
+		proc.carry = proc.init_carry(X);
+		System.out.println("carry: " + Arrays.deepToString(proc.carry));
+
+		Matrix datMat = new DenseMatrix(X).transpose();
+		Matrix carryMat = new DenseMatrix(proc.carry).transpose();
+		
+		// put carry data in front of data 
+		Matrix cat = Matlab.cat(1, carryMat, datMat);
+		System.out.println("[carry, data] = " + Arrays.deepToString(cat.getData()));
+		
+		// this is now combined: data plus carry in front
+		double[][] paddedData = cat.getData();
+		
+		/*
+		 * filter data 
+		 * TODO this is without state. I assume, we have to correct this later (but how? >.<)
+		 */
+		double[][] filtered = new double[paddedData.length][paddedData[0].length];
+        double[] channelVal;
+        for (int c = 0 ; c < paddedData.length; c++){
+            channelVal = filter(state.B, state.A, paddedData[c]);
+            filtered[c] = channelVal; // rows = channels
+        } // tested, is like matlab so far!!!
+        
+        int C = X.length;
+        int samples = X[0].length;
+        
+        // the input X is changed if anything happens to the output!
+        double[][][] X3 = reshape_2_to_3(X, 1, C, 20);
+        double[][][] X3a = extend_3(transposed(X));
+        
+        double[][][] result = bsxfun(X3, X3a, TIMES);
+        System.out.println(Arrays.deepToString(result));
+        
+        
+        //double[][] Xcov = moving_average(N, filtered, state);
+	}
+	
+	
+	public static double[][][] reshape_2_to_3(double[][] in, int dOuter, int dMiddle, int dInner){
+		if (dOuter*dInner*dMiddle != in.length * in[0].length) throw new IllegalArgumentException("MATRIX DIMESNIONS MUST AGREE");
+		double[][][] out = new double[dOuter][dMiddle][dInner];
+		int srci = 0, srcj = 0;
+		
+		for (int i = 0; i < dOuter; i++) {
+			for (int j = 0; j < dMiddle; j++) {
+				for (int k = 0; k < dInner; k++) {
+					out[i][j][k] = in[srci][srcj];
+					srci++;
+					if(srci >= in.length) {
+						srci = 0;
+						srcj++;
+					}
+				}
+			}
+		}
+		
+		return null;
+	}
+	
+	
+	private static final DoubleBinaryOperator TIMES = (double a, double b) -> a * b;
+	
+	static double[][][] bsxfun(double[][][] a, double[][][] b, DoubleBinaryOperator operator) {
+		int d1 = Math.max(a.length, b.length);
+		int d2 = Math.max(a[0].length, b[0].length);
+		int d3 = Math.max(a[0][0].length, b[0][0].length);
+		double[][][] out = new double[d1][d2][d3];
+		
+		for (int i = 0, ai = 0, bi = 0; i < d1; i++) {
+			
+			for (int j = 0, aj = 0, bj = 0; j < d2 ; j++) {
+				
+				for (int k = 0, ak = 0, bk = 0; k < d3; k++) {
+				
+					double operandA = a[ai][aj][ak];
+					double operandB = b[bi][bj][bk];
+					double cellresult = operator.applyAsDouble(operandA, operandB);
+					out[i][j][k] = cellresult;
+					
+					ak = (ak+1) % a[0][0].length;
+					bk = (bk+1) % b[0][0].length;
+				}
+				aj = (aj+1) % a[0].length;
+				bj = (bj+1) % b[0].length;
+			}
+			ai = (ai+1) % a.length;
+			bi = (bi+1) % b.length;
+		}
+		
+		return out;
+	}
+
+	
+	static double[][] bsxfun(double[][] a, double[][] b, DoubleBinaryOperator operator) {
+		int d1 = Math.max(a.length, b.length);
+		int d2 = Math.max(a[0].length, b[0].length);
+		double[][] out = new double[d1][d2];
+		
+		for (int i = 0, ai = 0, bi = 0; i < d1; i++) {
+			
+			for (int j = 0, aj = 0, bj = 0; j < d2 ; j++) {
+				
+					double operandA = a[ai][aj];
+					double operandB = b[bi][bj];
+					double cellresult = operator.applyAsDouble(operandA, operandB);
+					out[i][j] = cellresult;
+				
+				aj = (aj+1) % a[0].length;
+				bj = (bj+1) % b[0].length;
+			}
+			ai = (ai+1) % a.length;
+			bi = (bi+1) % b.length;
+		}
+		
+		return out;
+	}
+
+	
+	private static double[][] multiply_and_reshape(double[] f, double[] g, int chans, int samples) {
+		double[][] out = new double[samples][chans*chans];
+		/*
+		 * take every element from f and multiply it with every element of g. then
+		 * do the same for the next channel
+		 * whenever we have treated all samples from one channel, we begin anew
+		 */
+		for (int i = 0; i < chans; i+=chans) {
+			for (int j = 0; j < chans*chans; j++) {
+				out[i][j] = f[i] * g[j];
+				if(j == chans) j=chans;
+			}
+		}
+		
+		
+		return out;
+	}
+
+	/*
+	 * take all samples from X and put them into a row vector, but in the
+	 * correct order, that is:
+	 * take all channelvalues at timepoint t0 and put them after each other.
+	 * the resulting vector will first have all values from channel1, then
+	 * all values from channel2 and so on. 
+	 * 
+	 * @param x is assumed to have channels in the major dimension and samples in the minor
+	 */
+	private static double[] flatten(double[][] x) {
+		// new row should have samples times channels in length
+		double[] out = new double[x[0].length * x.length ];
+		int i = 0;
+		for (int s = 0; s < x[0].length; s++) {
+			for (int c = 0; c < x.length; c++) {
+				out[i] = x[c][s];
+				i++;
+			}
+		}
+		return out;
+	}
+
+}

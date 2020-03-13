@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<section name="Workbench">
+	<section name="conditionHistory">
+		<item value="u==3" key="conditionHistoryEntry_8"/>
+		<item value="n1==529" key="conditionHistoryEntry_9"/>
+		<item value="n&gt;S" key="conditionHistoryEntry_6"/>
+		<item value="i==31" key="conditionHistoryEntry_7"/>
+		<item value="10" key="conditionHistoryEntryCount"/>
+		<item value="50==k" key="conditionHistoryEntry_0"/>
+		<item value="loop==12" key="conditionHistoryEntry_1"/>
+		<item value="b == beta.length-1" key="conditionHistoryEntry_4"/>
+		<item value="n+stepsize &gt; S" key="conditionHistoryEntry_5"/>
+		<item value="m==3" key="conditionHistoryEntry_2"/>
+		<item value="m==5" key="conditionHistoryEntry_3"/>
+	</section>
+	<section name="org.eclipse.jdt.internal.debug.ui.ExpressionInformationControlCreator$ExpressionInformationControl">
+		<item value="701" key="SashWeightTree"/>
+		<item value="298" key="SashWeightDetails"/>
+		<item value="614" key="WIDTH"/>
+		<item value="194" key="HEIGHT"/>
+	</section>
+	<section name="org.eclipse.jdt.debug.ui.MAIN_METHOD_SELECTION_DIALOG">
+		<item value="true" key="ShowStatusLine"/>
+		<item value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#x0A;&lt;History&gt;&#x0A;&lt;historyRootNode/&gt;&#x0A;&lt;/History&gt;" key="History"/>
+		<section name="DialogBoundsSettings">
+			<item value="600" key="DIALOG_WIDTH"/>
+			<item value="1|Noto Sans|9.0|0|GTK|1|" key="DIALOG_FONT_NAME"/>
+			<item value="500" key="DIALOG_HEIGHT"/>
+			<item value="643" key="DIALOG_X_ORIGIN"/>
+			<item value="207" key="DIALOG_Y_ORIGIN"/>
+		</section>
+	</section>
+	<section name="AddExceptionDialog">
+		<item value="true" key="caughtChecked"/>
+		<item value="true" key="uncaughtChecked"/>
+	</section>
+</section>

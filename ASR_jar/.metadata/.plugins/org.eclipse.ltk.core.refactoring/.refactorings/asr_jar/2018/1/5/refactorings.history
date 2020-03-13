@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring comment="Rename local variable &apos;M&apos; in &apos;com.asr.sab.cal.ASR_Calibration.ASR_Calibration(...)&apos; to &apos;precomputedMatrix&apos;&#x0A;- Original project: &apos;asr_jar&apos;&#x0A;- Original element: &apos;com.asr.sab.cal.ASR_Calibration.ASR_Calibration(double[][], double[][], boolean).M&apos;&#x0A;- Renamed element: &apos;M&apos;&#x0A;- Update references to refactored element" description="Rename local variable &apos;M&apos;" id="org.eclipse.jdt.ui.rename.local.variable" input="/src&lt;com.asr.sab.cal{ASR_Calibration.java[ASR_Calibration~ASR_Calibration~\[\[D~\[\[D~Z@M!7222!7233!7233!7233!\[\[D!0!true" name="precomputedMatrix" references="true" stamp="1517301223508" version="1.0"/>
+</session>

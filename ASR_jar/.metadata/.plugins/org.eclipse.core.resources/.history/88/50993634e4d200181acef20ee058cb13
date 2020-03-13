@@ -1,0 +1,497 @@
+package com.asr.sab.utils;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.function.DoubleBinaryOperator;
+import java.util.stream.DoubleStream;
+import java.util.stream.IntStream;
+
+import org.apache.commons.math3.exception.OutOfRangeException;
+import org.apache.commons.math3.linear.Array2DRowRealMatrix;
+import org.apache.commons.math3.linear.DiagonalMatrix;
+import org.apache.commons.math3.linear.EigenDecomposition;
+import org.apache.commons.math3.linear.MatrixUtils;
+import org.apache.commons.math3.linear.RealMatrix;
+import org.apache.commons.math3.random.EmpiricalDistribution;
+import org.apache.commons.math3.special.Gamma;
+import org.apache.commons.math3.stat.Frequency;
+import org.apache.commons.math3.stat.StatUtils;
+import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
+import org.apache.commons.math3.stat.descriptive.SummaryStatistics;
+
+import la.matrix.DenseMatrix;
+import ml.subspace.DimensionalityReduction;
+import ml.utils.Matlab;
+
+public class Calib_Utils {
+
+	public static final DoubleBinaryOperator TIMES = (double a, double b) -> a * b;;
+	public static final DoubleBinaryOperator PLUS = (double a, double b) -> a + b;
+	public static final DoubleBinaryOperator MINUS = (double a, double b) -> a - b;
+
+	/**
+	 * Calculates the mixing matrix on the input data. The input data is the
+	 * filtered channel x samples. This method adds up #blocksize elements and
+	 * normalizes the content of the expanded covariance matrix U after all the
+	 * input has been computed.
+	 *
+	 * THIS IS TESTED
+	 *
+	 * @param input
+	 *            filtered [channel][samples]
+	 * @param blocksize
+	 *            how many samples are going to be aggregated
+	 *
+	 * @return the mixing matrix.
+	 */
+	public static double[][] calculate_mixingMatrix(double[][] input, int blocksize) {
+		/*
+		 * for k=1:blocksize range = min(S,k:blocksize:(S+k-1)); U = U
+		 * +reshape(bsxfun(@times,reshape(X(range,:),[],1,C),reshape(X(range,:),[],C,1))
+		 * ,size(U)); end FIXME we assume that samples is dividable by blocksize, make
+		 * sure that it is!
+		 */
+		int samples = input[0].length;
+		int channels = input.length;
+
+		double[][] U = MyMatrixUtils.compute_sample_cov_matrix(input, blocksize, samples, channels);
+
+		/*
+		 * normalize U by dividing by blocksize. we have to do this here because
+		 * blocksize != samples.
+		 */
+		for (int i = 0; i < U.length; i++) {
+			for (int j = 0; j < U[i].length; j++)
+				U[i][j] /= blocksize;
+		}
+
+		/*
+		 * channel medians over all blocks. each channel gets a median which is then
+		 * compared to a global median to see whether the channel is way off
+		 */
+		double[] UM = MyMatrixUtils.geometric_mean(U);
+
+		/*
+		 * square root of matrix median 1) reshape in CxC 2) make RealMatrix 3) compute
+		 * squareRoot on RealMatrix: X = sqrtm(A) is the principal square root of the
+		 * square matrix A. That is, X*X = A.
+		 */
+		// Matlab.reshape(new DenseMatrix(UM), channels, channels);
+		// double[][] sUM = MyMatlabUtils.reshape_to_symmetric_matrix(UM, channels);
+		double[][] sUM = MyMatlabUtils.reshape_1_to_2(UM, channels);
+		RealMatrix rm = new Array2DRowRealMatrix(sUM);
+		EigenDecomposition e = new EigenDecomposition(rm);
+		double[][] mixingMatrix = e.getSquareRoot().getData();
+
+		/*
+		 * OMG, it is happening.
+		 */
+		return mixingMatrix;
+	}
+
+	/**
+	 * This method calls the method <code>calculate_robust_statistics</code> and
+	 * returns an array which contains all channel means at the first index in the
+	 * minor dim and all channel standard deviations at the second index in the
+	 * minor dim. TODO test this
+	 * 
+	 * @param RMS
+	 *            The channel amplitude values.
+	 * @return A statistics array with two entries per channel: the mean and the
+	 *         stddev.
+	 */
+	public static double[][] calculateStatistics(double[][] RMS) {
+		int C = RMS.length;
+
+		// channelStats contains one mu and one sigma value for every channel.
+		double[][] channelStats = new double[C][2];
+		try {
+			for (int c = 0; c < C; c++) {
+				channelStats[c] = calculate_robust_statistics(RMS[c]);
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		return channelStats;
+	}
+
+	/**
+	 * Use the channel statistics and the eigendecomposition of the mixing matrix to
+	 * calculate threshold values per channel. This threshold matrix is never
+	 * changed or updated again.
+	 * 
+	 * @param channelStats
+	 * @param eigM
+	 * @return
+	 */
+	public static double[][] calculate_thresholdMatrix(double[][] channelStats, EigenDecomposition eigM) {
+
+		// get the channel stats
+		double[] mu = new double[channelStats.length];
+		double[] sig = new double[channelStats.length];
+
+		for (int c = 0; c < channelStats.length; c++) {
+			for (int j = 0; j < channelStats[0].length; j++) {
+				mu[c] = channelStats[c][0];
+				sig[c] = channelStats[c][1];
+			}
+		}
+
+		/*
+		 * T = diag(mu + cutoff * sig) * V';
+		 */
+		int cutoff = 5;
+		// multiply every element by cutoff
+		sig = Arrays.stream(sig).map(i -> i * cutoff).toArray();
+		for (int m = 0; m < mu.length; m++) {
+			mu[m] += sig[m];
+		}
+
+		/*
+		 * create diagonal matrix which contains the given data on the diagonal and 0s
+		 * else this has dimensions channel x channel T = diag(mu + cutoff*sig)*V';
+		 */
+		double[][] corrV = rearrange_v_to_Matlab_order(eigM.getVT()).getData();
+		double[][] diagMuCutoffSig = new DiagonalMatrix(mu).getData();
+		double[][] T = new double[channelStats.length][channelStats.length];
+		T = MyMatrixUtils.array_multiplication(diagMuCutoffSig, corrV);
+		// /*
+		// * S = squeeze(real(sum(V(:,i-1).*V(:,i),1))) < 0;
+		// * Vseq(:,S,i) = -Vseq(:,S,i);
+		// */
+		// int beforelast = T[0].length-2;
+		// int last = T[0].length-1;
+		// for (int j = 0; j < T.length; j++) {
+		// for (int k = 0; k < T[0].length; k++) {
+		// if ((Math.signum(T[0][beforelast]) != Math.signum(T[0][last]))) {
+		// T[j][k] = T[j][k] * -1;
+		// }
+		// }
+		// }
+		return T;
+	}
+
+	/**
+	 * Implementation of the function fit_eeg_distribution in the asr_calibrate
+	 * function. This function estimates the mean and the standard deviation of
+	 * clean EEG data from a sample of amplitude values (RMS) that may include a
+	 * large fraction of contaminated samples. The clean EEG is assumed to represent
+	 * a generalized Gaussian component in a mixture with near-arbitrary artifact
+	 * components. The method works by fitting a truncated generalized Gaussian
+	 * whose parameters are constrained by some default parameters (set in the
+	 * beginning of the function). The fit is performed by a grid search that always
+	 * finds a close-to optimal solution (if assumptions about distribution,..
+	 * hold).
+	 * 
+	 * 
+	 * @param channelRMS
+	 *            Vector of amplitude values of EEG, possibly containing artifacts.
+	 * @return The estimated mean and standard deviation of the clean EEG
+	 *         distribution of one channel The result array will contain the mean on
+	 *         position 0 and the std at pos 1.
+	 * @throws Exception
+	 *             throws an Exception if the values that are used for the
+	 *             calculation of the inverse Gamma function are too small or too
+	 *             big.
+	 */
+	public static double[] calculate_robust_statistics(double[] channelRMS) throws Exception {
+
+		Arrays.sort(channelRMS);
+
+		/*
+		 * take constants from matlab, these are the default values. These values never
+		 * change, so I input them hardcoded here.
+		 */
+		double[] quants = { 0.022, 0.6 };
+		double[] beta = { 1.7, 1.85, 2.0, 2.15, 2.3, 2.45, 2.6, 2.75, 2.9, 3.05, 3.2, 3.35, 3.5 };
+
+		/*
+		 * for b=1:length(beta) zbounds{b} =
+		 * sign(quants-1/2).*gammaincinv(sign(quants-1/2).*(2*quants-1),1/beta(b)).^(1/
+		 * beta(b)); rescale(b) = beta(b)/(2*gamma(1/beta(b)))
+		 *
+		 * Holy mother of batman. The implementation of Matlab's gammaincinv was kindly
+		 * provided by the CERN superkollider team, by the way.
+		 *
+		 */
+		double[][] zbounds = new double[beta.length][quants.length];
+		double[][] rescale = new double[beta.length][quants.length];
+		for (int q = 0; q < quants.length; q++) {
+			for (int b = 0; b < beta.length; b++) {
+				double x = Math.signum(quants[q] - 0.5) * ((2 * quants[q]) - 1);
+				double a = (1 / (beta[b]));
+				double y = (Math.signum(quants[q] - 0.5) * CERNGamma.gammaIncInv(x, a));
+				zbounds[b][q] = Math.pow(Math.abs(y), Math.abs(a));
+				// handle the case that the result of Math.pow SHOULD be an imaginary number
+				if (y < 0 && a < 1) {
+					zbounds[b][q] = -1 * zbounds[b][q];
+				}
+				rescale[b][q] = (beta[b]) / (2 * Gamma.gamma((1 / beta[b])));
+			}
+		}
+
+		/*
+		 * get matrix of shifted data ranges
+		 * X(bsxfun(@plus,(1:round(n*max_width))',round(n*(lower_min:step_sizes(1):
+		 * lower_min+max_dropout_fraction))));
+		 * 
+		 * range1 = (1:round(n*max_width))' range2 =
+		 * round(n*(lower_min:step_sizes(1):lower_min+max_dropout_fraction))
+		 * 
+		 */
+		int n = channelRMS.length;
+		double max_width = quants[1] - quants[0];
+		double[] range1 = DoubleStream.iterate(0, x -> x + 1).limit((long) (n * max_width)).toArray();
+
+		double lower_min = quants[0];
+		double step_size = 0.01;
+		double[] range2 = DoubleStream.iterate(lower_min, x -> x + step_size)
+						.limit(11) // this only depends on fixed parameters, limit is length, not max value
+						.toArray(); 
+		// scale and round the indices
+		range2 = Arrays.stream(range2).map(k -> Math.round(k * n)).toArray();
+		
+		// fill an index matrix which repeats range2 and always adds +1 to every element
+		double[][] indexWin = new double[range1.length][range2.length];
+		indexWin[0] = range2;
+		double[] needThisLater = range2;
+		for (int i = 1; i < indexWin.length; i++) {
+			range2 = Arrays.stream(range2).map(h -> h + 1).toArray();
+			indexWin[i] = range2;
+		}
+
+		/*
+		 * X = X(bsxfun(@plus,(1:round(n*max_width))',round(n*(lower_min:step_sizes(1):
+		 * lower_min+max_dropout_fraction)))); X1 = X(1,:); X = bsxfun(@minus,X,X1);
+		 */
+		double[][] shiftedX = new double[indexWin.length][indexWin[0].length];
+		for (int i = 0; i < indexWin.length; i++) {
+			for (int j = 0; j < indexWin[0].length; j++) {
+				shiftedX[i][j] = channelRMS[(int) indexWin[i][j]];
+			}
+			// gather every first element
+			//X1[i] = shiftedX[i][0];
+		}
+		shiftedX = MyMatrixUtils.transpose(shiftedX);
+
+		// after X has been indexed using the window, we want to take out the first row
+		// using the first row of indices of range2
+		double[] X1 = new double[indexWin[0].length];
+		for (int r = 0; r < X1.length; r++) {
+			X1[r] = shiftedX[0][(int)needThisLater[r]-1];
+		}
+		
+		/*
+		 * X = X .- X1
+		 */
+		double[][] X = new double[shiftedX.length][shiftedX[0].length];
+		for (int outer = 0; outer < shiftedX.length; outer++) {
+			for (int inner = 0; inner < shiftedX[0].length; inner++) {
+				X[outer][inner] = shiftedX[outer][inner] - X1[outer]; // we only need 11 values from X1
+			}
+		}
+		
+		/*
+		 * let's now search for some optimal parameters.
+		 */
+		double min_width = 0.1445;
+		int[] outerloopRange = IntStream.range((int)(n*min_width), (int)(n*max_width))
+							.map(x -> ((int)(x) + (int)(n*step_size)))
+							.toArray();
+		
+		double optVal = Double.MAX_VALUE;
+		double[] optLu = new double[2];
+		double[] optBounds = new double[2];
+		double optBeta = Double.MAX_VALUE;
+		for (int m = outerloopRange[outerloopRange.length-1]; m > outerloopRange[0]; m--) {
+			// scale and bin the data in the intervals
+			double nbins = Math.round((3 * Math.log((1 + ((double) m / 2))) / Math.log(2)));
+			double[][] H = computeH(X, m, nbins);
+
+			int BIN_COUNT = (int) nbins;
+			// we always want to have at least one bin.
+			if (BIN_COUNT <= 0)
+				BIN_COUNT = 1;
+			// this is not entirely the same like in Matlab
+			double[][] logq = histcLog(H, BIN_COUNT);
+
+			// evaluate truncated generalized Gaussian PDF at bin centers
+			for (int b = 0; b < beta.length - 1; b++) {
+				double[] bounds = zbounds[b];
+				double[] rangeNbins = DoubleStream.iterate(0.5, k -> k + 1).limit((long) (nbins)).toArray();
+				double diff = (Math.abs(bounds[0] - bounds[1])); // bounds will always have just two entries!
+
+				// x = bounds(1) + (0.5:(nbins-0.5))/nbins*diff(bounds);
+				double[] x = Arrays.stream(rangeNbins).map(o -> (((o / nbins) * diff) + bounds[0])).toArray();
+				double betab = beta[b];
+				double rescaleb = rescale[b][0];
+				// p = exp(-abs(x).^beta(b))*rescale(b);
+				double[] p = Arrays.stream(x).map(v -> (Math.exp(-1 * Math.pow(Math.abs(v), betab))) * rescaleb)
+						.toArray();
+				double sump = DoubleStream.of(p).sum();
+				p = Arrays.stream(p).map(q -> q / sump).toArray();
+
+				// calc KL divergences
+				// kl = sum(bsxfun(@times,p,bsxfun(@minus,log(p),logq(1:end-1,:)))) + log(m);
+				double[] kl = calculate_kl(m, logq, p);
+				// System.out.println("kl = [" + Arrays.toString(kl) + "];");
+
+				double minKl = Arrays.stream(kl).min().getAsDouble();
+				// double[] index = Arrays.stream(kl).filter(q -> q == minKl).toArray();
+				int index = IntStream.range(0, kl.length).filter(i -> kl[i] == minKl).toArray()[0];
+
+				// grid search
+				if (minKl < optVal) {
+					optVal = minKl;
+					optBeta = beta[b];
+					optBounds = bounds;
+					optLu[0] = X1[index];
+					optLu[1] = X1[index] + X[index][m - 1];
+				}
+			}
+		}
+
+		// recover distribution parameters at optimum
+		double alpha = (optLu[1] - optLu[0]) / (optBounds[1] - optBounds[0]);
+		double mu = optLu[0] - (optBounds[0] * alpha);
+		double betaVal = optBeta;
+
+		double sig = Math.sqrt(Math.pow(alpha, 2) * Gamma.gamma(3 / betaVal) / Gamma.gamma(1 / betaVal));
+
+		double[] stats = { mu, sig };
+		// System.out.println("mu and sigma are " + Arrays.toString(stats));
+		return stats;
+	}
+
+	private static double[] calculate_kl(int m, double[][] logq, double[] p) {
+		double[][] tmp = new double[logq.length][logq[0].length - 1];
+		for (int i = 0; i < logq.length; i++) {
+			for (int j = 0; j < logq[0].length - 1; j++) {
+				tmp[i][j] = Math.log(p[j]) - logq[i][j];
+				tmp[i][j] *= p[j];
+			}
+		}
+		double sum = 0;
+		double[] kl = new double[logq.length];
+		for (int i = 0; i < tmp.length; i++) {
+			for (int j = 0; j < tmp[0].length; j++) {
+				sum += tmp[i][j];
+			}
+			kl[i] = sum;
+			sum = 0.0;
+		}
+
+		for (int i = 0; i < kl.length; i++) {
+			kl[i] += Math.log(m);
+		}
+		return kl;
+	}
+
+	private static double[][] computeH(double[][] X, int m, double nbins) {
+		double[][] H = new double[X.length][m];
+		double[] mthElem = new double[X.length];
+		double[][] elems = new double[X.length][m];
+		double[] divnbins = new double[X.length];
+
+		for (int col = 0; col < X.length; col++) {
+			for (int i = 0; i < m; i++) {
+				// take the first m elements from every column
+				elems[col][i] = X[col][i];
+			}
+			mthElem[col] = X[col][m - 1];
+			divnbins[col] = nbins / mthElem[col];
+		}
+
+		for (int c = 0; c < X.length; c++) {
+			for (int s = 0; s < m; s++) {
+				H[c][s] = elems[c][s] * divnbins[c];
+			}
+		}
+		return H;
+	}
+
+	/**
+	 * Implementation of histogram bin count method (Matlab's histcount).
+	 * 
+	 * @param data
+	 *            The data we want to compute a histogram from
+	 * @param binCount
+	 *            How many bins do we want to create
+	 * @return How many datapoints lie in the respective bin
+	 */
+	public static double[][] histcLog(double[][] data, int binCount) {
+		double[][] histc = new double[data.length][binCount + 1];
+		EmpiricalDistribution distribution = new EmpiricalDistribution(binCount);
+
+		for (int c = 0; c < data.length; c++) {
+			double[] histogram = new double[binCount + 1];
+			distribution.load(data[c]);
+			int k = 0;
+			for (SummaryStatistics stats : distribution.getBinStats()) {
+				histogram[k] = stats.getN();
+				histogram[k] += 0.01;
+				histogram[k] = Math.log(histogram[k]);
+				k++;
+			}
+			histc[c] = histogram;
+
+			/*
+			 * In Matlab, the very last edge that is passed to histc is Inf. When histc
+			 * checks, how many values of H lie in the bin with the edge Inf, it counts zero
+			 * and the following steps are hist(:,end) = log(zero + 0.01). Since 0.01 is
+			 * hardcoded and in no dataset ever will we have a value bigger than Inf, the
+			 * computation here leads to the correct result.
+			 */
+			histc[c][binCount] = Math.log(0.01);
+		}
+		return histc;
+	}
+
+	/**
+	 * Take the eigendecomposition of the Mixing matrix and multiply the (filtered)
+	 * input signal with it. By doing this, we enter component space.
+	 * 
+	 * @param X
+	 *            filtered input signal
+	 * @param eig_M
+	 *            the eigendecomposition of the mixing matrix
+	 * @return the component activations
+	 */
+	public static double[][] compute_component_activations(double[][] X, EigenDecomposition eig_M) {
+		RealMatrix Xt = MatrixUtils.createRealMatrix(X);
+		/*
+		 * X = abs(X*V);
+		 */
+		RealMatrix V = eig_M.getV().transpose();
+		RealMatrix ordered_V = rearrange_v_to_Matlab_order(V);
+		double[][] XV = MyMatrixUtils.matrix_abs(Xt.transpose().multiply(ordered_V.transpose()).getData());
+		return XV;
+	}
+
+	/**
+	 * The rows of the eigenvectors have a different order than in Matlab. This
+	 * method reverse-sorts the eigenvectors so that they are the same in java and
+	 * matlab.
+	 * 
+	 * @param V
+	 *            a RealMatrix of eigenvectors.
+	 * @return the Matlab-ordered eigenvectors.
+	 */
+	public static RealMatrix rearrange_v_to_Matlab_order(RealMatrix V) {
+		RealMatrix ordered_V = V.copy();
+		for (int r = 0, i = V.getRowDimension() - 1; r < V.getRowDimension() && i >= 0; r++, i--) {
+			ordered_V.setRow(r, V.getRow(i));
+		}
+		return ordered_V;
+	}
+
+	public static double[][] rearrange_V_to_Matlab_order(RealMatrix V) {
+		RealMatrix ordered_V = V.copy();
+		for (int r = 0, i = V.getRowDimension() - 1; r < V.getRowDimension() && i >= 0; r++, i--) {
+			ordered_V.setRow(r, V.getRow(i));
+		}
+		return ordered_V.getData();
+	}
+
+}

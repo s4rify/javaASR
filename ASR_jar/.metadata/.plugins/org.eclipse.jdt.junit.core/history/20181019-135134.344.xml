@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?><testrun name="UT_ASR_Proc_Utils" project="ASR_Tests" tests="14" started="14" failures="3" errors="0" ignored="0">
+  <testsuite name="com.asr.sab.proc.UT_ASR_Proc_Utils" time="4.801">
+    <testcase name="eigenDecompTest_eigenvaluesD" classname="com.asr.sab.proc.UT_ASR_Proc_Utils" time="0.912"/>
+    <testcase name="testPadding" classname="com.asr.sab.proc.UT_ASR_Proc_Utils" time="0.082"/>
+    <testcase name="testXcovComputationAfterIndexing" classname="com.asr.sab.proc.UT_ASR_Proc_Utils" time="0.188"/>
+    <testcase name="testComputeR35" classname="com.asr.sab.proc.UT_ASR_Proc_Utils" time="0.039"/>
+    <testcase name="smokeTestComplete" classname="com.asr.sab.proc.UT_ASR_Proc_Utils" time="2.45">
+      <failure>arrays first differed at element [106]; expected:&lt;17.89277649&gt; but was:&lt;33.29369972839687&gt;&#13;
+	at org.junit.internal.ComparisonCriteria.arrayEquals(ComparisonCriteria.java:55)&#13;
+	at org.junit.Assert.assertArrayEquals(Assert.java:469)&#13;
+	at org.junit.Assert.assertArrayEquals(Assert.java:483)&#13;
+	at utils.TestUtils.assertDeepEquals(TestUtils.java:30)&#13;
+	at com.asr.sab.proc.UT_ASR_Proc_Utils.smokeTestComplete(UT_ASR_Proc_Utils.java:357)&#13;
+	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)&#13;
+	at sun.reflect.NativeMethodAccessorImpl.invoke(Unknown Source)&#13;
+	at sun.reflect.DelegatingMethodAccessorImpl.invoke(Unknown Source)&#13;
+	at java.lang.reflect.Method.invoke(Unknown Source)&#13;
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:50)&#13;
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)&#13;
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:47)&#13;
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)&#13;
+	at org.junit.rules.ExpectedException$ExpectedExceptionStatement.evaluate(ExpectedException.java:239)&#13;
+	at org.junit.rules.RunRules.evaluate(RunRules.java:20)&#13;
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:325)&#13;
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:78)&#13;
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:57)&#13;
+	at org.junit.runners.ParentRunner$3.run(ParentRunner.java:290)&#13;
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:71)&#13;
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:288)&#13;
+	at org.junit.runners.ParentRunner.access$000(ParentRunner.java:58)&#13;
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:268)&#13;
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:363)&#13;
+	at org.eclipse.jdt.internal.junit4.runner.JUnit4TestReference.run(JUnit4TestReference.java:86)&#13;
+	at org.eclipse.jdt.internal.junit.runner.TestExecution.run(TestExecution.java:38)&#13;
+	at org.eclipse.jdt.internal.junit.runner.RemoteTestRunner.runTests(RemoteTestRunner.java:538)&#13;
+	at org.eclipse.jdt.internal.junit.runner.RemoteTestRunner.runTests(RemoteTestRunner.java:760)&#13;
+	at org.eclipse.jdt.internal.junit.runner.RemoteTestRunner.run(RemoteTestRunner.java:460)&#13;
+	at org.eclipse.jdt.internal.junit.runner.RemoteTestRunner.main(RemoteTestRunner.java:206)&#13;
+Caused by: java.lang.AssertionError: expected:&lt;17.89277649&gt; but was:&lt;33.29369972839687&gt;&#13;
+	at org.junit.Assert.fail(Assert.java:88)&#13;
+	at org.junit.Assert.failNotEquals(Assert.java:834)&#13;
+	at org.junit.Assert.assertEquals(Assert.java:553)&#13;
+	at org.junit.Assert.assertEquals(Assert.java:683)&#13;
+	at org.junit.internal.InexactComparisonCriteria.assertElementsEqual(InexactComparisonCriteria.java:19)&#13;
+	at org.junit.internal.ComparisonCriteria.arrayEquals(ComparisonCriteria.java:53)&#13;
+	... 29 more&#13;
+&#13;
+</failure>
+    </testcase>
+    <testcase name="testXcovComputation" classname="com.asr.sab.proc.UT_ASR_Proc_Utils" time="0.262"/>
+    <testcase name="testComputeR1" classname="com.asr.sab.proc.UT_ASR_Proc_Utils" time="0.047"/>
+    <testcase name="testComputeR2" classname="com.asr.sab.proc.UT_ASR_Proc_Utils" time="0.012"/>
+    <testcase name="testComputeR3" classname="com.asr.sab.proc.UT_ASR_Proc_Utils" time="0.035"/>
+    <testcase name="eigenDecompTest_eigenvectorsV" classname="com.asr.sab.proc.UT_ASR_Proc_Utils" time="0.002">
+      <failure>1 failed: arrays first differed at element [0]; expected:&lt;0.14109838262221092&gt; but was:&lt;0.0&gt;&#13;
+	at org.junit.internal.ComparisonCriteria.arrayEquals(ComparisonCriteria.java:55)&#13;
+	at org.junit.Assert.assertArrayEquals(Assert.java:469)&#13;
+	at utils.TestUtils.assertDeepEquals(TestUtils.java:19)&#13;
+	at com.asr.sab.proc.UT_ASR_Proc_Utils.eigenDecompTest_eigenvectorsV(UT_ASR_Proc_Utils.java:254)&#13;
+	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)&#13;
+	at sun.reflect.NativeMethodAccessorImpl.invoke(Unknown Source)&#13;
+	at sun.reflect.DelegatingMethodAccessorImpl.invoke(Unknown Source)&#13;
+	at java.lang.reflect.Method.invoke(Unknown Source)&#13;
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:50)&#13;
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)&#13;
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:47)&#13;
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)&#13;
+	at org.junit.rules.ExpectedException$ExpectedExceptionStatement.evaluate(ExpectedException.java:239)&#13;
+	at org.junit.rules.RunRules.evaluate(RunRules.java:20)&#13;
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:325)&#13;
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:78)&#13;
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:57)&#13;
+	at org.junit.runners.ParentRunner$3.run(ParentRunner.java:290)&#13;
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:71)&#13;
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:288)&#13;
+	at org.junit.runners.ParentRunner.access$000(ParentRunner.java:58)&#13;
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:268)&#13;
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:363)&#13;
+	at org.eclipse.jdt.internal.junit4.runner.JUnit4TestReference.run(JUnit4TestReference.java:86)&#13;
+	at org.eclipse.jdt.internal.junit.runner.TestExecution.run(TestExecution.java:38)&#13;
+	at org.eclipse.jdt.internal.junit.runner.RemoteTestRunner.runTests(RemoteTestRunner.java:538)&#13;
+	at org.eclipse.jdt.internal.junit.runner.RemoteTestRunner.runTests(RemoteTestRunner.java:760)&#13;
+	at org.eclipse.jdt.internal.junit.runner.RemoteTestRunner.run(RemoteTestRunner.java:460)&#13;
+	at org.eclipse.jdt.internal.junit.runner.RemoteTestRunner.main(RemoteTestRunner.java:206)&#13;
+Caused by: java.lang.AssertionError: expected:&lt;0.14109838262221092&gt; but was:&lt;0.0&gt;&#13;
+	at org.junit.Assert.fail(Assert.java:88)&#13;
+	at org.junit.Assert.failNotEquals(Assert.java:834)&#13;
+	at org.junit.Assert.assertEquals(Assert.java:553)&#13;
+	at org.junit.Assert.assertEquals(Assert.java:683)&#13;
+	at org.junit.internal.InexactComparisonCriteria.assertElementsEqual(InexactComparisonCriteria.java:19)&#13;
+	at org.junit.internal.ComparisonCriteria.arrayEquals(ComparisonCriteria.java:53)&#13;
+	... 28 more&#13;
+&#13;
+</failure>
+    </testcase>
+    <testcase name="testThresholdOperatorCalculation" classname="com.asr.sab.proc.UT_ASR_Proc_Utils" time="0.377"/>
+    <testcase name="testInitCarry" classname="com.asr.sab.proc.UT_ASR_Proc_Utils" time="0.005"/>
+    <testcase name="testDataReconstruction" classname="com.asr.sab.proc.UT_ASR_Proc_Utils" time="0.084"/>
+    <testcase name="provide_M_or_T_andComputeTheRest" classname="com.asr.sab.proc.UT_ASR_Proc_Utils" time="0.306">
+      <failure>arrays first differed at element [33]; expected:&lt;90.81262207&gt; but was:&lt;89.75503895776514&gt;&#13;
+	at org.junit.internal.ComparisonCriteria.arrayEquals(ComparisonCriteria.java:55)&#13;
+	at org.junit.Assert.assertArrayEquals(Assert.java:469)&#13;
+	at org.junit.Assert.assertArrayEquals(Assert.java:483)&#13;
+	at utils.TestUtils.assertDeepEquals(TestUtils.java:30)&#13;
+	at com.asr.sab.proc.UT_ASR_Proc_Utils.provide_M_or_T_andComputeTheRest(UT_ASR_Proc_Utils.java:322)&#13;
+	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)&#13;
+	at sun.reflect.NativeMethodAccessorImpl.invoke(Unknown Source)&#13;
+	at sun.reflect.DelegatingMethodAccessorImpl.invoke(Unknown Source)&#13;
+	at java.lang.reflect.Method.invoke(Unknown Source)&#13;
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:50)&#13;
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)&#13;
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:47)&#13;
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)&#13;
+	at org.junit.rules.ExpectedException$ExpectedExceptionStatement.evaluate(ExpectedException.java:239)&#13;
+	at org.junit.rules.RunRules.evaluate(RunRules.java:20)&#13;
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:325)&#13;
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:78)&#13;
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:57)&#13;
+	at org.junit.runners.ParentRunner$3.run(ParentRunner.java:290)&#13;
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:71)&#13;
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:288)&#13;
+	at org.junit.runners.ParentRunner.access$000(ParentRunner.java:58)&#13;
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:268)&#13;
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:363)&#13;
+	at org.eclipse.jdt.internal.junit4.runner.JUnit4TestReference.run(JUnit4TestReference.java:86)&#13;
+	at org.eclipse.jdt.internal.junit.runner.TestExecution.run(TestExecution.java:38)&#13;
+	at org.eclipse.jdt.internal.junit.runner.RemoteTestRunner.runTests(RemoteTestRunner.java:538)&#13;
+	at org.eclipse.jdt.internal.junit.runner.RemoteTestRunner.runTests(RemoteTestRunner.java:760)&#13;
+	at org.eclipse.jdt.internal.junit.runner.RemoteTestRunner.run(RemoteTestRunner.java:460)&#13;
+	at org.eclipse.jdt.internal.junit.runner.RemoteTestRunner.main(RemoteTestRunner.java:206)&#13;
+Caused by: java.lang.AssertionError: expected:&lt;90.81262207&gt; but was:&lt;89.75503895776514&gt;&#13;
+	at org.junit.Assert.fail(Assert.java:88)&#13;
+	at org.junit.Assert.failNotEquals(Assert.java:834)&#13;
+	at org.junit.Assert.assertEquals(Assert.java:553)&#13;
+	at org.junit.Assert.assertEquals(Assert.java:683)&#13;
+	at org.junit.internal.InexactComparisonCriteria.assertElementsEqual(InexactComparisonCriteria.java:19)&#13;
+	at org.junit.internal.ComparisonCriteria.arrayEquals(ComparisonCriteria.java:53)&#13;
+	... 29 more&#13;
+&#13;
+</failure>
+    </testcase>
+  </testsuite>
+</testrun>

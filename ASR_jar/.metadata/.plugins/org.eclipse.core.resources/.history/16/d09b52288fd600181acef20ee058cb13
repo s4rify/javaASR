@@ -1,0 +1,442 @@
+package com.asr.sab.proc;
+
+import static org.junit.Assert.assertArrayEquals;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.nio.file.FileSystems;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.stream.DoubleStream;
+import java.util.stream.IntStream;
+
+import org.apache.commons.math3.linear.EigenDecomposition;
+import org.apache.commons.math3.linear.MatrixUtils;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
+import org.junit.runners.Parameterized;
+
+import com.asr.sab.cal.ASR_Calibration;
+import com.asr.sab.debug.CSVReader;
+import com.asr.sab.debug.CsvWriter;
+import com.asr.sab.utils.MyMatrixUtils;
+import com.asr.sab.utils.Proc_Utils;
+
+import la.matrix.DenseMatrix;
+import la.matrix.Matrix;
+import ml.utils.Matlab;
+import utils.TestUtils;
+
+public class UT_ASR_Proc_Utils {
+	
+	private static final String FIRST_TEST_DATA_FOLDER = "resource/firstTestset/";
+	
+	private static final Path DATA_OUTPUT_PATH = Paths.get("E:/Documents/Phd/ASR_service/ASR_Tests/out/cleanData");
+	
+	private CsvWriter csvWriter = new CsvWriter(DATA_OUTPUT_PATH);
+	
+	@Rule
+	public final ExpectedException expected = ExpectedException.none();
+
+
+	/**
+	 * Test the initialization of the segment of data which is prepended to the current
+	 * data chunk before filtering.
+	 * 
+	 * @throws IOException 
+	 */
+	@Test
+	public void testInitCarry() throws IOException {
+		// arrange
+		double[][] data = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "process_data.csv");
+		
+		// act
+		int srate = 250;
+		int P = (int)Math.round((0.5/2) * srate);
+		double[][] actualCarry = Proc_Utils.init_carry(data, P);
+		
+		// assert
+		double[][] expectedCarry = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "carry.csv");
+		TestUtils.assertDeepEquals(expectedCarry, actualCarry, 0.1);
+	}
+	
+	
+	/**
+	 * This tests the computation of the covariance matrix from the padded, filtered data.
+	 * This covariance matrix is the basis for the Eigendecomposition which is used to detect
+	 * artifacts in the data during the processing.
+	 * 
+	 * @throws IOException 
+	 */
+	@Test
+	public void testXcovComputation() throws IOException {
+		// arrange
+		double[][] filtpadded = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "filtpadded.csv");
+		
+		// act
+		int srate = 250;
+		int N = (int) (0.5 * srate);
+		double[][] actualXcov = Proc_Utils.compute_cross_cov(N, filtpadded);
+
+		// assert
+		double[][] expectedXcov = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "Xcov1.csv");
+		TestUtils.assertDeepEquals(expectedXcov, actualXcov, 0.1);
+	}
+	
+	
+	
+	/**
+	 * This test tests the indexing of the covariance matrix in stepsize intervals. 
+	 * The result has the form C x C x 'howmanysteps' (eg 35). Which means that we end up with a 
+	 * covariance matrix for every chunk of raw data we process.
+	 * 
+	 * @throws IOException 
+	 */
+	@Test
+	public void testXcovComputationAfterIndexing() throws IOException {
+		// arrange
+		double[][] Xcov = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "Xcov1.csv");
+		
+		// act
+		int stepsize = 32;
+		int C = 24;
+		double[][][] tmpXcov = Proc_Utils.extract_Xcov_at_stepsize(Xcov, stepsize, C);
+		
+		// assert
+		for (int i = 1; i < 10; i++) {
+			double[][] actualXcov = Proc_Utils.computeCurrentXcov(C, tmpXcov, i-1);
+			double[][] expectedXcov = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "Xcov2" + i + ".csv");
+			TestUtils.assertDeepEquals(expectedXcov, actualXcov, 0.1); 
+		}
+	}
+	
+	
+	int sRate = 250;
+	/**
+	 * Prepend the carry portion of the data to the current chunk of processing data which is to be cleaned. 
+	 * @throws IOException
+	 */
+	@Test
+	public void testPadding() throws IOException {
+		// arrange
+		double[][] data = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "process_data_small.csv");
+		double[][] carry = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "carry_small.csv");
+		
+		// act
+		double[][] onlyPadded = Proc_Utils.pad_data_with_previous_segment(data, carry);
+		double[][] actualFiltPadded = Proc_Utils.filter_data(onlyPadded, sRate); 
+
+		// assert
+		double[][] expectedFiltpadded = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "filtpadded.csv");
+		TestUtils.assertDeepEquals(expectedFiltpadded, actualFiltPadded, 10); 
+	}
+
+	
+	/**
+	 * This tests the calculation of the threshold operator keep. Keep contains C-times ones or zeros which
+	 * indicate whether a channel at the given segment contains an artifact or not.
+	 * It is used to determine whether we calculate an elaborate reconstruction matrix or whether we 
+	 * use the identity matrix for the reconstruction of the raw data.
+	 * 
+	 * @throws IOException
+	 */
+	@Test
+	public void testThresholdOperatorCalculation() throws IOException {
+		int C = 23;
+
+		double[][] T = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "T.csv");
+		double maxdims = 0.66;
+		maxdims = Math.round(C * maxdims);
+
+		for (int i = 1; i < 35 ; i++) {
+			double[][] V = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "V_all_sorted" + i + ".csv");
+			double[] D = CSVReader.readDoublesFromFile(FIRST_TEST_DATA_FOLDER + "D_all_sorted" + i + ".csv");
+			double[] actualKeep = Proc_Utils.compute_threshold_operator(C, T, maxdims, V, D);
+			double[] expectedKeep = CSVReader.readDoublesFromFile(FIRST_TEST_DATA_FOLDER + "KEEP" + i + ".csv");
+			// assert
+			assertArrayEquals( i + " failed", expectedKeep, actualKeep, 0); 
+		}
+	}
+	
+	
+	/**
+	 * Test the calculation of the reconstruction matrix R at step 1.
+	 * The reconstruction matrix is used to reconstruct potentially artefactual data. 
+	 * 
+	 * @throws IOException
+	 */
+	@Test
+	public void testComputeR1() throws IOException {
+		testComputeR("V_all_sorted1.csv", "R_all1.csv", "KEEP1.csv");
+	}
+	
+	/**
+	 * Test the calculation of the reconstruction matrix R at step 1.
+	 * The reconstruction matrix is used to reconstruct potentially artefactual data. 
+	 * 
+	 * @throws IOException
+	 */
+	@Test
+	public void testComputeR2() throws IOException {
+		testComputeR("V_all_sorted2.csv", "R_all2.csv", "KEEP2.csv");
+	}
+
+	/**
+	 * Test the calculation of the reconstruction matrix R at step 3.
+	 * This is, where test data set 1 contained an artifact.
+	 * The reconstruction matrix is used to reconstruct potentially artefactual data. 
+	 * 
+	 * @throws IOException
+	 */
+	@Test
+	public void testComputeR3() throws IOException {
+		testComputeR("V_all_sorted3.csv", "R_all3.csv", "KEEP3.csv");
+	}
+	
+	/**
+	 * Test the calculation of the reconstruction matrix R at the last step
+	 * (at least when using the initial test set).
+	 * The reconstruction matrix is used to reconstruct potentially artefactual data. 
+	 * 
+	 * @throws IOException
+	 */
+	@Test
+	public void testComputeR35() throws IOException {
+		testComputeR("V_all_sorted35.csv", "R_all35.csv", "KEEP35.csv");
+	}
+	
+	
+
+	/**
+	 * Helper test method which computes the reconstruction matrix with given eigenvectors and -values
+	 * and compares it to a test reconstruction matrix calculated in matlab.
+	 * 
+	 * @param fnameV	The eigenvectors we want to use for the reconstruction matrix calculation
+	 * @param fnameR	The test reconstruction matrix
+	 * @param fnameK	The test threshold operator keep.
+	 * @throws IOException	
+	 */
+	private void testComputeR(String fnameV, String fnameR, String fnameK) throws IOException {
+		// arrange
+		double[][] M = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "M.csv");
+		int C = 23;
+		double[][] Vsort = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + fnameV);
+		double[] KEEP = CSVReader.readDoublesFromFile(FIRST_TEST_DATA_FOLDER + fnameK);
+		
+		// act
+		double[][] actualR = Proc_Utils.compute_R(Vsort, KEEP, M, C);
+		double[][] expectedR = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + fnameR);
+		
+		// assert
+		TestUtils.assertDeepEquals( fnameR + " failed", expectedR, actualR, 5); 
+	}
+	
+	/**
+	 * Test the computation of eigenvectors. 
+	 * This yields fairly different results from the matlab computation (left vs right eigenvectors for example)
+	 * which is no problem in the computation because:
+	 * - if the eigenvalues > 0, then the eigenvectors are the same and the cleaned data is the same
+	 * - if the eigenvalues == 0, then the eigenvectors are different but that does not contribute much to the cleaned data
+	 */
+	@Test
+	public void eigenDecompTest_eigenvectorsV() throws IOException {
+		int C = 23;
+		for (int i = 1; i < 35; i++) {
+			double[][] curXcov = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "Xcov2" + i + ".csv");
+			EigenDecomposition XcovEigen = new EigenDecomposition(MatrixUtils.createRealMatrix(curXcov));
+			double[][] test_v = XcovEigen.getV().getData();
+			double[][] actualV = Proc_Utils.sortV(C, test_v);
+			double[][] expectedV = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "V_all_sorted" + i + ".csv");
+			// Eigenvectors can have different sign and be equivalent still
+			TestUtils.assertDeepEquals( i + " failed", MyMatrixUtils.matrix_abs(expectedV), MyMatrixUtils.matrix_abs(actualV), 0.01);
+		}
+	} 
+	
+	
+	/**
+	 * Test the computation of eigenvalues.
+	 * 
+	 * @throws IOException
+	 */
+	@Test
+	public void eigenDecompTest_eigenvaluesD() throws IOException {
+		int C = 24;
+		for (int i = 1; i < 10; i++) {
+			double[][] curXcov = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "Xcov2" + i + ".csv");
+			EigenDecomposition XcovEigen = new EigenDecomposition(MatrixUtils.createRealMatrix(MyMatrixUtils.transpose(curXcov)));
+			double[] actualD = Proc_Utils.sortD(C, XcovEigen.getD().getData());
+			double[] expectedD = CSVReader.readDoublesFromFile(FIRST_TEST_DATA_FOLDER + "D_all_sorted" + i + ".csv");
+			// Eigenvectors can have different sign and be equivalent still
+			assertArrayEquals( i + " failed", expectedD, actualD, 0.001);
+		}
+	}
+	
+	
+	private static final boolean printResultsToFile = false;
+
+	/**
+	 * This test is the 'proof' for my suspicion that T is the reason for differently cleaned signals:
+	 * It is a smoke test which means that nothing except for the calibration and the process data is provided.
+	 * For this test, one other matrix is provided as well: T or M.
+	 * It fails when T is computed by my code and it succeeds when T is provided. 
+	 * 
+	 * The constructor is to be used as follows:
+	 * 		boolean calculateT = false;
+	 * 		ASR_Calibration calibState = new ASR_Calibration(calibData, T, calculateT);
+	 * 	This provides T and computes M from the calibrationData --> successful test
+	 * 
+	 * The constructor is to be used as follows:
+	 * 		boolean calculateT = true;
+	 * 		ASR_Calibration calibState = new ASR_Calibration(calibData, M, calculateT);
+	 * 	This provides M and computes T from the calibrationData --> failed test
+	 * 
+	 * @throws IOException
+	 */
+	@Test
+	public void provide_M_or_T_andComputeTheRest() throws IOException{
+		// arrange
+		double[][] processData = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "process_data.csv");
+		double[][] calibData = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "calib_data.csv");
+		double[][] T = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "T.csv");
+		double[][] M = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "M.csv");
+		
+		// act
+		int sampleRate = 250;
+		boolean calculateT = false;
+		ASR_Calibration calibState = new ASR_Calibration(calibData, T, calculateT);
+		
+		ASR_Process proc = new ASR_Process(calibState, sampleRate);
+		double[][] actualCleanData = proc.asr_process(processData);
+
+		if (printResultsToFile) {
+			for (int j = 0; j < actualCleanData.length; j++) {
+				csvWriter.writeArray(actualCleanData[j], j + "outJava");
+			}
+		}
+		
+		// assert
+		double[][] expectedCleanData = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "cleanData.csv");
+		TestUtils.assertDeepEquals(expectedCleanData, actualCleanData, 1);
+	}
+	
+	
+	
+
+	/**
+	 * System test.
+	 * This gives almost perfect data, the reason for its failure is the computation of T.
+	 * @throws IOException
+	 */
+	@Test
+	public void smokeTestComplete() throws IOException{
+		// arrange
+		double[][] processData = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "process_data.csv");
+		double[][] calibData = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "calib_data.csv");
+		
+		// act
+		int sampleRate = 250;
+		ASR_Calibration calibState = new ASR_Calibration(calibData);
+		
+		ASR_Process proc = new ASR_Process(calibState, sampleRate);
+		double[][] actualCleanData = proc.asr_process(processData);
+
+//		if (printResultsToFile) {
+//			for (int j = 0; j < actualCleanData.length; j++) {
+//				csvWriter.writeArray(actualCleanData[j], j + "outJava");
+//			}
+//		}
+		Path exportPath = FileSystems.getDefault().getPath("E:\\Documents\\Phd\\Snippets\\ASR_serviceTestingData"); 
+		CsvWriter.writeMatrixToPath(actualCleanData, exportPath, "actualCleanData");
+		
+		
+		// assert
+		double[][] expectedCleanData = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "cleanData.csv");
+		TestUtils.assertDeepEquals(expectedCleanData, actualCleanData, 10);
+	}
+	
+	
+	/**
+	 * This tests the reconstruction of data, when provided T, M, padded data and 
+	 * covariance matrices as well as their decomposition V and D and the threshold operator keep.
+	 * 
+	 * @throws IOException		when the files are not found in the provided location
+	 */
+	@Test
+	public void testDataReconstruction() throws IOException {
+
+		// arrange
+		int C = 23;
+		int stepsize = 32;
+		int P = (int)Math.round((0.5/2) * 250);
+		int last_n = 0;
+		int S = 1064;
+		int n = stepsize - 1;
+		boolean last_foundArtifact = false;
+		
+		double[][] M = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "M.csv");
+		double[][] onlypadded = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "onlypadded.csv");
+		double[][] reconstructedDataTotal = onlypadded;
+		double[][] reconstructedDataChunk = new double[C][stepsize];
+		double [][] last_R = Matlab.eye(C).getData();
+		
+		
+		// act
+		for (int u = 0; u < stepsize; u++) {
+			double[][] curV = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "V_all_sorted" + (u+1) + ".csv");
+			double[] keep = CSVReader.readDoublesFromFile(FIRST_TEST_DATA_FOLDER + "KEEP" + (u+1) + ".csv");
+        	
+        	double keepSum = DoubleStream.of(keep).sum();
+			boolean foundArtifact = keepSum < C; 
+    		
+			double[][] R;
+    		if (foundArtifact) {
+    			R = Proc_Utils.compute_R(curV, keep, M, C); 
+    			//System.out.println("Reconstruction in "+ u);
+    		} else {
+    			R = Matlab.eye(C).getData();
+    		}
+    		
+			int[] subrange = (last_n + stepsize > S)
+							? IntStream.rangeClosed(last_n, S-1).toArray()	// boundary condition: only in last iteration
+							: IntStream.rangeClosed(last_n, n).toArray(); 	// major case
+			
+			if (foundArtifact || last_foundArtifact) {
+				//System.out.println(Arrays.toString(subrange));
+
+				reconstructedDataChunk = Proc_Utils.reconstruct_data(C, onlypadded, R, last_R, subrange);
+	
+	    		int i = 0;
+	    		int from = subrange[0];
+	    		int to = subrange[subrange.length-1]; 
+	    		for (int c = 0; c < C; c++) {
+					for (int s = from; s <= to; s++) {
+						reconstructedDataTotal[c][s] = reconstructedDataChunk[i][c];
+						i++;
+					}
+					i = 0;
+				}
+			}
+    		
+			/*
+			 * In the very first case of the loop we have a boundary condition and do not want to update n
+			 */
+			if (u != 0) {
+				last_n = n+1;
+				n += stepsize;
+			}
+    		last_R = R;
+    		last_foundArtifact = foundArtifact;
+    		if (subrange[subrange.length-1] >= S-1) break;
+        }
+		
+		// assert 
+        double[][] outdata = Arrays.copyOfRange(MyMatrixUtils.transpose(reconstructedDataTotal), 0, reconstructedDataTotal[0].length-P); 
+        double[][] actualOutData =  MyMatrixUtils.transpose(outdata);
+        double[][] expectedOutData = CSVReader.readDoublesFromFile2d(FIRST_TEST_DATA_FOLDER + "cleanData.csv");
+        TestUtils.assertDeepEquals(expectedOutData, actualOutData, 10);
+	}
+	
+}

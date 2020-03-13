@@ -1,0 +1,16 @@
+1510734149295	Delete element
+1510734481698	Delete element
+1510734586350	Delete element
+1510855097992	Rename field 'calibState'
+1510859235813	Delete element
+1510859238959	Delete element
+1510929184861	Extract method 'extracted'
+1510929213316	Extract method 'extracted'
+1510934084494	Extract method 'extracted'
+1511013793332	Move compilation unit
+1511013852678	Delete element
+1511023845913	Delete elements
+1511023879521	Move files
+1511025119850	Rename method 'scanFromLine'
+1511026577214	Move member 'calculate_mixingMatrix'
+1511026593353	Move member 'calculate_thresholdMatrix'

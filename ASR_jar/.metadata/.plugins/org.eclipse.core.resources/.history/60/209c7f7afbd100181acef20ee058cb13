@@ -1,0 +1,489 @@
+package com.asr.sab.utils;
+
+import java.util.function.DoubleBinaryOperator;
+
+import org.apache.commons.math3.stat.StatUtils;
+
+/**
+ * Created by Sarah Blum on 9/29/17
+ * Carl von Ossietzky Univesity of Oldenburg.
+ */
+
+public class MyMatrixUtils {
+
+    private static final double median_percentile = 50.0;
+	private static final int maxiter = 500;
+	private static final DoubleBinaryOperator PLUS = (double a, double b) -> a + b;
+
+	/**
+     * Why is nothing ever done in Java.
+     *
+     * @param array the array to transpose
+     * @return  the transposed array.
+     */
+    public static double[][] transpose (double[][] array) {
+        if (array == null || array.length == 0) throw new IllegalArgumentException("The array is emtpy!");
+        int width = array.length;
+        int height = array[0].length;
+        double[][] array_new = new double[height][width];
+        for (int x = 0; x < width; x++) {
+            for (int y = 0; y < height; y++) {
+                array_new[y][x] = array[x][y];
+            }
+        }
+        return array_new;
+    }
+    
+    
+	/**
+     * Why is nothing ever done in Java.
+     *
+     * @param array the array to transpose
+     * @return  the transposed array.
+     */
+    public static int[][] transpose(int[][] array){
+        if (array == null || array.length == 0) throw new IllegalArgumentException("The array is emtpy!");
+        int width = array.length;
+        int height = array[0].length;
+        int[][] array_new = new int[height][width];
+        for (int x = 0; x < width; x++) {
+            for (int y = 0; y < height; y++) {
+                array_new[y][x] = array[x][y];
+            }
+        }
+        return array_new;
+    }
+    
+
+    /**
+     * Matrix- Utils: get absolute matrix from given matrix m by
+     * taking the abs value of every element of the matrix.
+     * 
+     * @param m The matrix from which we need the absolute values.
+     * @return abs(m).
+     */
+    public static double[][] matrix_abs(double[][] m) {
+        int rowLen = m.length;
+        int colLen = m[0].length;
+        double[][] m_abs = new double[rowLen][colLen];
+        for (int i = 0; i < rowLen ; i++) {
+            for (int j = 0; j < colLen ; j++) {
+                m_abs[i][j] = Math.abs(m[i][j]);
+            }
+        }
+        return m_abs;
+    }
+
+
+
+    /**
+     * Matrix multiplication method like in the books. This takes
+     * pairwise elements, multiplies them and then adds them up.  The
+     * resulting matrix will be much smaller than the inputs!
+     * 
+     * @param m1 Multiplicand
+     * @param m2 Multiplier
+     * @return Element-wise product
+     */
+    public static double[][] array_multiplication(double[][] m1, double[][] m2) {
+        int m1ColLength = m1[0].length; // m1 columns length
+        int m2RowLength = m2.length;    // m2 rows length
+        if(m1ColLength != m2RowLength) throw new IllegalArgumentException("Dimensions must match.");
+        int mRRowLength = m1.length;    // m result rows length
+        int mRColLength = m2[0].length; // m result columns length
+        double[][] mResult = new double[mRRowLength][mRColLength];
+        for(int i = 0; i < mRRowLength; i++) {         // rows from m1
+            for(int j = 0; j < mRColLength; j++) {     // columns from m2
+                for(int k = 0; k < m1ColLength; k++) { // columns from m1
+                    mResult[i][j] += m1[i][k] * m2[k][j];
+                }
+            }
+        }
+        return mResult;
+    }
+
+
+    /**
+     * Implementation of the difference equation of a
+     * Direct Form II Transposed IIR filter.
+     *
+     * @param b
+     * 		The array of b-coefficients
+     * @param a
+     * 		The array of a-coefficients, where the first value must be 1
+     * @param X
+     * 		The signal to filter
+     * @return
+     * 		A double array containing the filtered signal
+     */
+    public static double[] filter_one_channel (double[] b, double[] a, double[] X) {
+        int n = a.length;
+        double[] z = new double[n];
+        double[] Y = new double[X.length];
+        for (int m = 0; m < Y.length; m++) {
+            Y[m] = b[0] * X[m] + z[0];
+            for (int i = 1; i < n; i++) {
+                z[i-1] = b[i] * X[m] + z[i] - a[i] * Y[m];
+            }
+        }
+        return Y;
+    }
+    
+    
+
+    /**
+     * Compute the covariance matrix of all channel combinations with the possibility of aggregating
+     * the samples over #blocksize samples.
+     * 
+     * @param input the data with which we want to compute the covariance
+     * @param blocksize the blocksize over which we want to average. If blocksize == samples, all
+     * 			samples from the channel are treated together
+     * @param samples how many samples does one channel have
+     * @param channels	how many channels does the input have
+     * @return	U, the covariance super - matrix which contains all covariance matrices for all channels.
+     * 			It will be [samples][channels*channels] in size! 
+     */
+    public static double[][] compute_sample_cov_matrix(double[][] input, int blocksize, int samples, int channels) {
+    	if(blocksize == samples) throw new IllegalArgumentException("The blocksize must be smaller than the samples!");
+    	double[][] U = new double[samples/blocksize][channels * channels];
+
+    	for (int k = 0; k < blocksize ; k++) {
+    		for (int block = 0, r = k; block < samples/blocksize; r += blocksize, block++) {
+
+    			// all channel combinations
+    			for (int c1 = 0; c1 < channels; c1++) {
+    				for (int c2 = 0; c2 < channels ; c2++) {
+    					// multiply channel elements
+    					// U += reshape(bsxfun(@times,reshape(X,1,C,[]),reshape(X,C,1,[]))
+    					U[block][c1*channels+c2] += input[c1][r] * input[c2][r];
+    				}
+    			}
+    		}
+    	}
+    	return U;
+    }
+
+   
+    
+    
+    /**
+     * Implementation of the geometric median.
+     * this is basically finding a median vector in a matrix full  of vectors; this is the equivalent of 
+     * the median in a set of single values, only for vectors.
+     * 
+     * Smart description for smart people: Calculate the geometric median for a set of observations 
+     * (mean under a Laplacian noise distribution). This is using Weiszfeld's algorithm.
+     * 
+     * @param X the matrix in which to find a median vector (e.g. one column)
+     * @return	Y a vector which contains the median vector (here a sample across all channels).
+     */
+    public static double[] geometric_mean(final double[][] X) {
+    	/*
+    	 * when called, U is handed over (X=U), and it has [samples][channels], so it is
+    	 * the other way around. this is why we transpose it after a few lines
+    	 */
+    	
+    	final int channelPairCount = X[0].length;
+    	final int blockCount = X.length;
+    	
+    	// transpose in.
+    	// before: in[blocks][channelpairs]
+    	// after: in[channelpairs][blocks]
+    	double[][] Xt = MyMatrixUtils.transpose(X);
+    	
+    	/*
+    	 *   y = median(X);
+    	 */
+    	double[] mediansPerChannelPair = new double[channelPairCount];
+    	for (int i = 0; i < channelPairCount; i++) {
+    		mediansPerChannelPair[i] = StatUtils.percentile(Xt[i], median_percentile);
+    	}
+    	
+    	double[] y = mediansPerChannelPair;
+    	for (int iteration = 0; iteration < maxiter; iteration++) {
+			/*
+			 * invnorms = 1./sqrt(sum( bsxfun(@minus,X,y) .^2,2));
+			 * 
+    		 * 
+    		 * X: Input matrix of dimensions blocks x channelpairs
+    		 * y: (Intermediate) result vector, one entry per channelpair
+    		 *    Is repeatedly updated to converge to the desired result.
+    		 * 
+    		 * Calculate differences:
+    		 * b: block index
+    		 * 
+    		 * for each b, calculate invnorm[b] as follows:
+    		 * 
+    		 *   difference[cp] = X[b][cp] - y[cp]  // bsxfun(@minus,X,y)
+    		 * 
+    		 *   squares[cp] = dfference[cp] * difference[cp];
+    		 * 
+    		 *   invnorm[b] = sum(squares)
+    		 *   
+    		 * end invnorm calc.
+    		 */ 
+    		double[] invnorm = new double[blockCount];
+    		double sumInvnorms = 0.0;
+    		double[] sumOfProducts = new double[channelPairCount];
+
+    		for (int b = 0; b < blockCount; b++) {
+    			double sum_squares = 0.0; 
+    			for (int cp = 0; cp < channelPairCount; cp++) {
+					double diff = X[b][cp] - y[cp];
+					sum_squares += diff * diff;
+    			}
+    			/*
+    			 *  sum(invnorms) 
+    			 */
+    			sumInvnorms += invnorm[b] = 1.0 / Math.sqrt(sum_squares);
+			
+    			/*
+    			 *  sum(bsxfun(@times,X,invnorms))
+    			 *  funny side-effect: this sums up all the values a little bit in each iteration.
+    			 *  Each sum gets one summand per iteration, the sum is only done after the outer loop
+    			 *  is finished.    			 
+    			 */
+    			for (int cp = 0; cp < channelPairCount; cp++) {
+    				sumOfProducts[cp] += X[b][cp] * invnorm[b];
+    			}
+    		}
+    		
+    		/*
+    		 *  sum(bsxfun(@times,X,invnorms)) / sum(invnorms)
+    		 *  where sum(bsxfun(..)) is the result of the previous loop which is
+    		 *  contained in sumOfProducts.
+    		 */
+//    		assert y.length == channelPairCount : "Wrong dimension: y should have an entry for each pair of channels.";
+    		for (int cp = 0; cp < channelPairCount; cp++) {
+    			y[cp] = sumOfProducts[cp] / sumInvnorms;
+    		}
+		}
+    	return y;
+    }
+
+
+    /**
+     * Calculates the root mean square (RMS) for an array of double values.
+     * 
+     * first part: RMS = sqrt(sum(X(:,c).^2)/N)
+     *
+     * second part: sqrt(sum(RMS(bsxfun(@plus,round(1:N*(1-window_overlap):S-N),(0:N-1)')))/N);
+     * 
+     * @param values the array which contains the values of whom we calculate the RMS
+     * @return the RMS value for this array. The output will have dimensions [channels][window.len]
+     */
+    public static double[][] calculate_RMS (double[][] X, double window_overlap, int N) {
+    	int S = X.length;
+    	int C = X[0].length;
+    	/*
+    	 * first part: rms = X(:,c).^2;
+    	 */
+    	double[][] squaredElements = new double[S][C];
+    	for (int c = 0; c < C ; c++) {
+    		for (int s = 0; s < S; s++) {
+    			// build all squares; this is rms = X(:,c).^2
+    			squaredElements[s][c] = X[s][c] * X[s][c]; 
+    		}
+    	}
+    	squaredElements = MyMatrixUtils.transpose(squaredElements);
+
+    	/*
+    	 * second part: sqrt(sum(RMS(win))/N);
+    	 */
+    	
+    	/*
+    	 *  this fills win: 
+    	 *    w1 = round(1:N*(1-window_overlap):S-N)
+    	 *    w2 = (0:N-1)'
+    	 *    win = bsxfun(@plus,range1,range2)
+    	 */
+    	int[][] win = fill_index_window(X, window_overlap, N);
+    	double[][] RMS = new double[C][win.length];
+    	double[] interim = new double[win.length];
+
+    	for (int c = 0; c < C; c++) {
+    		for (int i = 0; i < win.length; i++) {
+    			for (int j = 0; j < win[0].length; j++) {
+    				// use the index window to take out some values from every channel
+    				interim[j] += (squaredElements[c][win[i][j]]/N);
+    			}
+    		}
+    		// do sqrt(sum(rms)) as soon as we have all values from one channel
+    		for (int r = interim.length-1; r >= 0; r--) {
+    			RMS[c][r] = Math.sqrt(interim[r]);
+    			interim[r] = 0;
+    		}
+    	}
+    	
+    	
+    	return RMS;
+    }
+
+    
+    /**
+     * In Matlab, for every channel, the rms is calculated for a range of indices that are calculated as follows:
+     *   range1 = round(1:N*(1-window_overlap):S-N)
+     *   range2 = (0:N-1)'
+     * This means that we get a whole range of indices that are later used to chose some squared values
+     * per channel, not just average over all of them. This is comparable to the calculation of the 
+     * mixing matrix and its sample covariance matrices, where we get a matrix per sample window. Equally,
+     * here we get several indices per channel, so that we generate the root mean square value over some
+     * samples from every channel.
+     *   
+     *    
+     * @param X
+     * @param window_overlap
+     * @param N
+     * @return
+     */
+	private static int[][] fill_index_window(double[][] X, double window_overlap, double N) {
+		int S = X.length; 
+		int range1_len = (int)Math.round((S-N)/(N*(1-window_overlap)));
+		int range2_len = (int)N;
+		double[] range1 = new double[range1_len-1];
+		double[] range2 = new double[range2_len];
+		
+		double val = (N*(1-window_overlap));
+		for (int i = 1; i < range1.length; i++ ) {
+			range1[i] += (range1[i-1] + val);
+		}
+		// after all the computations have been completed, round to nearest int
+		for (int i = 0; i < range1.length; i++) {
+			range1[i] = range1[i] +1;
+			range1[i] = Math.round(range1[i]);
+		}
+		
+		for (int i = 0; i < N; i++) range2[i] = i;
+		
+		//double[] addedRanges = MyMatlabUtils.bsxfun(range1, range2, PLUS);
+		
+		
+		int[][] win =  new int[range1.length][range2_len]; 
+		// bsxfun(@plus,range1,range2)
+		for (int r1 = 0; r1 < range1.length; r1++) {
+			for (int r2 = 0; r2 < range2_len; r2++) {
+				win[r1][r2] = (int) (range1[r1] + range2[r2]);
+			}
+		}
+		
+		return win;
+	}
+
+    
+    /**
+     * Little helper method which expands a 2-dim array to a 3-dim array (with
+     * one singleton dimension).
+     * 
+     * @param 	in The array we want to expand
+     * @return	new double[][][] {in}
+     */
+    public static double[][][] extend_3(double[][] in){
+    	return new double[][][] {in};
+    }
+    
+    
+
+
+	
+
+	
+	/**
+	 * Y = cumsum(X) computes the cumulative sum along the first non-singleton
+     * dimension of X. Y is the same size as X.
+     * This (like in Matlab) computes the cumulative sum row-wise, that is, we take
+     * the same element from every column and sum them up. 
+     * 
+	 * @param in	the array in which the elements are supposed to be summed up
+	 * @return 		an array with the same dimensions as in where the elements are summed
+	 * 				up while keeping the interim results.
+	 */
+	public static double[][] cumsumfun(double[][] in){
+				
+		int dx = in[0].length;
+		int dy = in.length;
+
+
+		double[][] out = new double[dy][dx];
+
+		// copy first line
+		for (int x=0; x < dx; x++) {
+			out[0][x] = in[0][x];
+		}
+
+
+		// special if only one line (e.g. cumsum([1,2,3]) -> [1,3,6]
+		if (dy==1){
+			for (int x = 1; x < dx; x++){
+				out[0][x] = out[0][x] + out[0][x-1];
+			}
+		}
+
+		// start with second line. start with y=1 because we look back
+		for (int y = 1; y < dy; y++){
+			for (int x = 0; x < dx; x++){
+				out[y][x] = in[y][x] + out[y-1][x];
+			}
+		} 
+		return out;
+	}
+	
+	
+		
+	
+    /**
+     * 
+     * TODO THIS IS NOT TESTED SO FAR!!
+     * 
+     * Reshape the matrix into a new form. New size should have the same number of elements as current size.
+     *
+     * @param m    new number of rows
+     * @param n    new number of columns
+     * @return array reshaped values
+     */
+    public static double[][] reshape(double[][] A, int m, int n) {
+        int origM = A.length;
+        int origN = A[0].length;
+        if(origM*origN != m*n){
+            throw new IllegalArgumentException("New matrix must be of same area as matrix A");
+        }
+        double[][] B = new double[m][n];
+        double[] A1D = new double[A.length * A[0].length];
+
+        int index = 0;
+        for (double[] aA : A) {
+            for (int j = 0; j < A[0].length; j++) {
+                A1D[index++] = aA[j];
+            }
+        }
+
+        index = 0;
+        for(int i = 0;i<n;i++){
+            for(int j = 0;j<m;j++){
+                B[j][i] = A1D[index++];
+            }
+        }
+        return B;
+    }
+    
+    
+    
+    /*    static class Range implements Iterable<Integer> {
+
+    final int start, end;
+
+    public Range(int start, int end) {
+        this.start = start;
+        this.end = end;
+    }
+
+    public static Range range(int start, int end) {
+        return new Range(start, end);
+    }
+
+    @Override
+    public Iterator<Integer> iterator() {
+        return IntStream.rangeClosed(start,end).iterator();
+    }
+}*/
+
+}

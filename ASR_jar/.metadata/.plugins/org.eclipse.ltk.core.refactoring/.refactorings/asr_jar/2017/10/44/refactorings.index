@@ -1,0 +1,5 @@
+1509452378933	Rename local variable 'Xsegment'
+1509453487559	Extract method 'extracted'
+1509453583438	Change method 'extract_Xcov_at_stepsize'
+1509454114488	Rename local variable 'Xsegments'
+1509454125047	Rename local variable 'Xcov'

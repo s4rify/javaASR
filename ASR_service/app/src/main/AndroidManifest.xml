@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.asr.sab.asr">
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+
+        <activity android:name=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+
+            <!-- these actions are the one that must be bound to the intents before
+             starting the service with them-->
+            <intent-filter>
+                <action android:name="android.intent.action.START_CAL"/>
+                <action android:name="android.intent.action.START_PROC"/>
+                <action android:name="android.intent.action.INTERRUPT_CAL"/>
+
+            </intent-filter>
+        </activity>
+
+
+        <!-- Do we have multiple services in one app now? -->
+        <service android:name=".ForegroundCalibService" />
+        <service android:name=".ForegroundProcService" />
+
+    </application>
+
+</manifest>

@@ -1,0 +1,6 @@
+This src folder is linked into the eclipse project which lies in../ASR_jar.
+The jar project is supposed to wrap the java method into a jar file which can be used in the end 
+from the Android studio service project.
+
+All development takes place in eclipse now.
+The git from this parent folder is also the git for the dsp part.

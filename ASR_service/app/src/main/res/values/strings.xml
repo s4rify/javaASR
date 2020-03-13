@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">ASR</string>
+    <string name="button1">Start Calibration</string>
+    <string name="button2">Interrupt Calibration</string>
+    <string name="button3">Start Stream Processing</string>
+    <string name="button4">Stop Stream Processing</string>
+</resources>

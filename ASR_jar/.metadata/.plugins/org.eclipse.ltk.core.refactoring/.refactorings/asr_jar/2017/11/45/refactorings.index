@@ -1,0 +1,6 @@
+1510045181523	Rename local variable 'X'
+1510060997319	Delete element
+1510061594314	Delete element
+1510069668733	Rename field 'state'
+1510069674920	Rename field 'asrState'
+1510069975189	Rename method 'asr_calibrate'
